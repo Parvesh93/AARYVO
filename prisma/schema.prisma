@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum LeadStatus { NEW WARM HOT QUALIFIED WON LOST }
+enum ConversationChannel { WEBSITE WHATSAPP INSTAGRAM VOICE }
+
+model User {
+  id String @id @default(cuid())
+  name String?
+  email String @unique
+  createdAt DateTime @default(now())
+  businesses BusinessMember[]
+}
+
+model Business {
+  id String @id @default(cuid())
+  name String
+  slug String @unique
+  websiteUrl String?
+  createdAt DateTime @default(now())
+  members BusinessMember[]
+  agents Agent[]
+  leads Lead[]
+  appointments Appointment[]
+}
+
+model BusinessMember {
+  id String @id @default(cuid())
+  userId String
+  businessId String
+  role String @default("OWNER")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  @@unique([userId, businessId])
+}
+
+model Agent {
+  id String @id @default(cuid())
+  businessId String
+  name String
+  goal String
+  systemPrompt String @db.Text
+  isActive Boolean @default(true)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  knowledgeItems KnowledgeItem[]
+}
+
+model KnowledgeItem {
+  id String @id @default(cuid())
+  agentId String
+  source String
+  title String?
+  content String @db.LongText
+  createdAt DateTime @default(now())
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+}
+
+model Conversation {
+  id String @id @default(cuid())
+  agentId String
+  channel ConversationChannel @default(WEBSITE)
+  visitorId String?
+  startedAt DateTime @default(now())
+  agent Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages Message[]
+  lead Lead?
+}
+
+model Message {
+  id String @id @default(cuid())
+  conversationId String
+  role String
+  content String @db.Text
+  createdAt DateTime @default(now())
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+model Lead {
+  id String @id @default(cuid())
+  businessId String
+  conversationId String? @unique
+  name String?
+  email String?
+  phone String?
+  requirement String? @db.Text
+  budget String?
+  score Int @default(0)
+  status LeadStatus @default(NEW)
+  createdAt DateTime @default(now())
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  appointments Appointment[]
+}
+
+model Appointment {
+  id String @id @default(cuid())
+  businessId String
+  leadId String?
+  startsAt DateTime
+  status String @default("REQUESTED")
+  notes String? @db.Text
+  createdAt DateTime @default(now())
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lead Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+}
