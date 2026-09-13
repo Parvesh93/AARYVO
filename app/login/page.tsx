@@ -1,0 +1,7 @@
+import Link from "next/link";
+import { login } from "@/app/actions/auth";
+
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const { error } = await searchParams;
+  return <main className="flex min-h-screen items-center justify-center px-6 py-12"><div className="w-full max-w-md rounded-[36px] bg-white p-8 shadow-xl shadow-black/5 md:p-10"><Link href="/" className="font-semibold tracking-[0.25em]">AARYVO</Link><p className="mt-12 text-sm uppercase tracking-[0.2em] text-black/40">Welcome back</p><h1 className="mt-3 text-4xl font-semibold tracking-[-0.05em]">Sign in to your AI workforce.</h1>{error && <p className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error === "exists" ? "Account already exists. Sign in instead." : "Email or password is incorrect."}</p>}<form action={login} className="mt-8 space-y-4"><input name="email" type="email" required placeholder="Email address" className="w-full rounded-2xl border border-black/10 px-5 py-4 outline-none focus:border-black/30"/><input name="password" type="password" required placeholder="Password" className="w-full rounded-2xl border border-black/10 px-5 py-4 outline-none focus:border-black/30"/><button className="w-full rounded-full bg-black px-6 py-4 font-medium text-white">Sign in</button></form><p className="mt-6 text-center text-sm text-black/50">New to AARYVO? <Link href="/signup" className="font-medium text-black">Create account</Link></p></div></main>;
+}
