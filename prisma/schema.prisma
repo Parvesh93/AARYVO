@@ -30,6 +30,7 @@ model User {
   passwordHash String
   createdAt    DateTime @default(now())
   businesses   BusinessMember[]
+  @@map("user")
 }
 
 model Business {
@@ -42,6 +43,7 @@ model Business {
   agents       Agent[]
   leads        Lead[]
   appointments Appointment[]
+  @@map("business")
 }
 
 model BusinessMember {
@@ -51,8 +53,8 @@ model BusinessMember {
   role       String @default("OWNER")
   user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
   @@unique([userId, businessId])
+  @@map("businessmember")
 }
 
 model Agent {
@@ -65,6 +67,7 @@ model Agent {
   business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   conversations  Conversation[]
   knowledgeItems KnowledgeItem[]
+  @@map("agent")
 }
 
 model KnowledgeItem {
@@ -75,6 +78,7 @@ model KnowledgeItem {
   content   String @db.LongText
   createdAt DateTime @default(now())
   agent     Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  @@map("knowledgeitem")
 }
 
 model Conversation {
@@ -86,6 +90,7 @@ model Conversation {
   agent     Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
   messages  Message[]
   lead      Lead?
+  @@map("conversation")
 }
 
 model Message {
@@ -95,6 +100,7 @@ model Message {
   content        String @db.Text
   createdAt      DateTime @default(now())
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  @@map("message")
 }
 
 model Lead {
@@ -112,6 +118,7 @@ model Lead {
   business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
   appointments   Appointment[]
+  @@map("lead")
 }
 
 model Appointment {
@@ -124,4 +131,5 @@ model Appointment {
   createdAt  DateTime @default(now())
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   lead       Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  @@map("appointment")
 }
