@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendLeadNotification } from "@/lib/notifications";
 import { corsHeadersFor, isAllowedWidgetOrigin, rateLimitWidget } from "@/lib/widget-security";
 
 export async function OPTIONS(request: Request) {
@@ -29,6 +30,7 @@ export async function POST(request: Request) {
 
     const conversation = await prisma.conversation.create({ data: { agentId: agent.id, channel: "WEBSITE", visitorId } });
     const lead = await prisma.lead.create({ data: { businessId: agent.businessId, conversationId: conversation.id, name, email: email || null, phone: phone || null, score: 15, status: "NEW", requirement: "Pre-chat contact captured; qualification pending." } });
+    void sendLeadNotification({ businessId: agent.businessId, leadId: lead.id, event: "NEW_LEAD" });
 
     return NextResponse.json({ conversationId: conversation.id, lead: { id: lead.id, status: lead.status, score: lead.score } }, { headers });
   } catch (error) {
