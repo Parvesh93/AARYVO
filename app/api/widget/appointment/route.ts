@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { sendLeadNotification } from "@/lib/notifications";
 import { corsHeadersFor, isAllowedWidgetOrigin, rateLimitWidget } from "@/lib/widget-security";
 
 export async function OPTIONS(request: Request) { return new NextResponse(null, { status: 204, headers: corsHeadersFor(request) }); }
@@ -24,6 +25,7 @@ export async function POST(request: Request) {
 
     const appointment = await prisma.appointment.create({ data: { businessId: conversation.agent.businessId, leadId: conversation.lead.id, startsAt, status: "REQUESTED", notes: conversation.lead.requirement } });
     await prisma.lead.update({ where: { id: conversation.lead.id }, data: { status: "QUALIFIED", score: Math.max(conversation.lead.score, 85) } });
+    void sendLeadNotification({ businessId: conversation.agent.businessId, leadId: conversation.lead.id, event: "APPOINTMENT", appointmentAt: startsAt });
     return NextResponse.json({ appointment: { id: appointment.id, startsAt: appointment.startsAt, status: appointment.status } }, { headers });
   } catch (error) {
     console.error("AARYVO widget appointment error", error);
