@@ -18,6 +18,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
       business: {
         include: {
           _count: { select: { leads: true, appointments: true } },
+          leads: { orderBy: { createdAt: "desc" }, take: 6 },
           agents: { take: 1, include: { _count: { select: { conversations: true, knowledgeItems: true } } } },
         },
       },
@@ -49,7 +50,7 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
         <div className="mt-12">
           <p className="text-sm text-black/40">AI Sales Dashboard</p>
           <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em]">{knowledgeCount ? "Your AI employee is ready." : "Your AI employee is ready to learn."}</h1>
-          <p className="mt-3 max-w-2xl text-black/50">{knowledgeCount ? `AARYVO has ${knowledgeCount} approved website pages and can now answer prospects using this business knowledge.` : `Workspace created successfully. Scan ${business.websiteUrl || "your business content"} to build the knowledge base.`}</p>
+          <p className="mt-3 max-w-2xl text-black/50">{knowledgeCount ? `AARYVO has ${knowledgeCount} approved website pages and can now answer and qualify prospects using this business knowledge.` : `Workspace created successfully. Scan ${business.websiteUrl || "your business content"} to build the knowledge base.`}</p>
         </div>
 
         {query.knowledge === "success" && <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">Knowledge base built successfully. {query.pages || knowledgeCount} website pages were saved.</div>}
@@ -76,6 +77,21 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             <div className="mt-3 rounded-2xl bg-[#f6f7fb] px-4 py-3 text-sm text-black/60">Knowledge · {knowledgeCount} pages</div>
           </div>
         </section>
+
+        {business.leads.length > 0 && (
+          <section className="mt-6 rounded-[32px] bg-white p-6 shadow-sm md:p-8">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div><p className="text-sm text-black/40">Sales pipeline</p><h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">Latest captured leads</h2></div>
+              <p className="text-sm text-black/45">Automatically qualified from conversations</p>
+            </div>
+            <div className="mt-6 overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-sm">
+                <thead><tr className="border-b border-black/10 text-black/40"><th className="pb-3 font-medium">Prospect</th><th className="pb-3 font-medium">Requirement</th><th className="pb-3 font-medium">Budget</th><th className="pb-3 font-medium">Score</th><th className="pb-3 font-medium">Status</th></tr></thead>
+                <tbody>{business.leads.map((lead) => <tr key={lead.id} className="border-b border-black/5 last:border-0"><td className="py-4"><p className="font-medium">{lead.name || "Anonymous prospect"}</p><p className="mt-1 text-xs text-black/40">{lead.phone || lead.email || "Contact not captured yet"}</p></td><td className="max-w-md py-4 pr-6 text-black/65">{lead.requirement || "Qualification in progress"}</td><td className="py-4 text-black/65">{lead.budget || "—"}</td><td className="py-4 font-medium">{lead.score}/100</td><td className="py-4"><span className={`rounded-full px-3 py-1 text-xs font-medium ${lead.status === "HOT" || lead.status === "QUALIFIED" ? "bg-emerald-50 text-emerald-700" : lead.status === "WARM" ? "bg-amber-50 text-amber-700" : "bg-[#f6f7fb] text-black/60"}`}>{lead.status}</span></td></tr>)}</tbody>
+              </table>
+            </div>
+          </section>
+        )}
 
         {knowledgeCount > 0 && <AgentTester businessName={business.name} />}
       </div>
