@@ -1,0 +1,8 @@
+ALTER TABLE `business`
+  ADD COLUMN `notificationEmail` VARCHAR(191) NULL,
+  ADD COLUMN `bookingTimeZone` VARCHAR(191) NOT NULL DEFAULT 'Asia/Kolkata',
+  ADD COLUMN `bookingSlotMinutes` INT NOT NULL DEFAULT 30,
+  ADD COLUMN `bookingStartHour` INT NOT NULL DEFAULT 10,
+  ADD COLUMN `bookingEndHour` INT NOT NULL DEFAULT 18,
+  ADD COLUMN `bookingDaysAhead` INT NOT NULL DEFAULT 7,
+  ADD COLUMN `bookingWorkingDays` VARCHAR(191) NOT NULL DEFAULT '1,2,3,4,5';
