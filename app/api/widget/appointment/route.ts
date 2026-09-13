@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { isSlotAvailable } from "@/lib/availability";
+import { bookingSettings, isSlotAvailable } from "@/lib/availability";
+import { createGoogleCalendarEvent, isGoogleCalendarConfigured } from "@/lib/google-calendar";
 import { prisma } from "@/lib/prisma";
 import { sendLeadNotification } from "@/lib/notifications";
 import { corsHeadersFor, isAllowedWidgetOrigin, rateLimitWidget } from "@/lib/widget-security";
@@ -11,7 +12,6 @@ export async function POST(request: Request) {
   try {
     const rate = rateLimitWidget(request, "widget-appointment", 8, 60 * 60 * 1000);
     if (!rate.allowed) return NextResponse.json({ error: "Too many booking attempts. Please try again later." }, { status: 429, headers });
-
     const body = await request.json();
     const agentId = typeof body.agentId === "string" ? body.agentId : "";
     const visitorId = typeof body.visitorId === "string" ? body.visitorId.slice(0, 190) : "";
@@ -24,12 +24,16 @@ export async function POST(request: Request) {
     if (!isAllowedWidgetOrigin(request, conversation.agent.business.websiteUrl)) return NextResponse.json({ error: "This website is not authorized to use this AARYVO agent." }, { status: 403, headers });
     if (!conversation.lead?.name || (!conversation.lead.phone && !conversation.lead.email)) return NextResponse.json({ error: "Contact details are required before booking." }, { status: 400, headers });
 
-    const available = await isSlotAvailable(conversation.agent.businessId, startsAt);
-    if (!available) return NextResponse.json({ error: "That time is no longer available. Please choose another slot." }, { status: 409, headers });
+    if (!(await isSlotAvailable(conversation.agent.businessId, startsAt))) return NextResponse.json({ error: "That time is no longer available. Please choose another slot." }, { status: 409, headers });
 
     const appointment = await prisma.appointment.create({ data: { businessId: conversation.agent.businessId, leadId: conversation.lead.id, startsAt, status: "REQUESTED", notes: conversation.lead.requirement } });
     await prisma.lead.update({ where: { id: conversation.lead.id }, data: { status: "QUALIFIED", score: Math.max(conversation.lead.score, 85) } });
+
     void sendLeadNotification({ businessId: conversation.agent.businessId, leadId: conversation.lead.id, event: "APPOINTMENT", appointmentAt: startsAt });
+    if (isGoogleCalendarConfigured()) {
+      void createGoogleCalendarEvent({ businessName: conversation.agent.business.name, leadName: conversation.lead.name, leadEmail: conversation.lead.email, leadPhone: conversation.lead.phone, requirement: conversation.lead.requirement, startsAt, durationMinutes: bookingSettings.slotMinutes, timeZone: bookingSettings.timeZone }).catch((error) => console.error("AARYVO Google Calendar event error", error));
+    }
+
     return NextResponse.json({ appointment: { id: appointment.id, startsAt: appointment.startsAt, status: appointment.status } }, { headers });
   } catch (error) {
     console.error("AARYVO widget appointment error", error);
