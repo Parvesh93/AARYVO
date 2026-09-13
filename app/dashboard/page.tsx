@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { logout } from "@/app/actions/auth";
 import { buildKnowledgeBase } from "@/app/actions/knowledge";
+import AgentTester from "@/app/dashboard/AgentTester";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
@@ -47,8 +48,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
 
         <div className="mt-12">
           <p className="text-sm text-black/40">AI Sales Dashboard</p>
-          <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em]">{knowledgeCount ? "Your AI employee is learning." : "Your AI employee is ready to learn."}</h1>
-          <p className="mt-3 max-w-2xl text-black/50">{knowledgeCount ? `AARYVO has ${knowledgeCount} approved website pages in its knowledge base. Next we’ll make the agent answer from this content.` : `Workspace created successfully. Scan ${business.websiteUrl || "your business content"} to build the knowledge base.`}</p>
+          <h1 className="mt-2 text-4xl font-semibold tracking-[-0.04em]">{knowledgeCount ? "Your AI employee is ready." : "Your AI employee is ready to learn."}</h1>
+          <p className="mt-3 max-w-2xl text-black/50">{knowledgeCount ? `AARYVO has ${knowledgeCount} approved website pages and can now answer prospects using this business knowledge.` : `Workspace created successfully. Scan ${business.websiteUrl || "your business content"} to build the knowledge base.`}</p>
         </div>
 
         {query.knowledge === "success" && <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-800">Knowledge base built successfully. {query.pages || knowledgeCount} website pages were saved.</div>}
@@ -75,6 +76,8 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
             <div className="mt-3 rounded-2xl bg-[#f6f7fb] px-4 py-3 text-sm text-black/60">Knowledge · {knowledgeCount} pages</div>
           </div>
         </section>
+
+        {knowledgeCount > 0 && <AgentTester businessName={business.name} />}
       </div>
     </main>
   );
