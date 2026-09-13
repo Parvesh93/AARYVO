@@ -33,7 +33,7 @@ async function accessToken() {
   const response = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth-grant-type:jwt-bearer".replace("oauth-grant", "oauth:grant"), assertion }),
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
     cache: "no-store",
   });
   if (!response.ok) {
@@ -103,6 +103,36 @@ export async function createGoogleCalendarEvent(params: {
     throw new Error(`Google event creation failed (${response.status}): ${text.slice(0, 400)}`);
   }
   return response.json();
+}
+
+export async function listVisibleGoogleCalendars() {
+  const auth = await accessToken();
+  if (!auth) return { configured: false, configuredCalendarId: null, calendars: [] };
+
+  const response = await fetch(`${CALENDAR_API}/users/me/calendarList?maxResults=100`, {
+    headers: { Authorization: `Bearer ${auth.token}` },
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Calendar list request failed (${response.status}): ${text.slice(0, 400)}`);
+  }
+
+  const data = await response.json() as {
+    items?: Array<{ id?: string; summary?: string; accessRole?: string; primary?: boolean }>;
+  };
+
+  return {
+    configured: true,
+    configuredCalendarId: auth.calendarId,
+    calendars: (data.items || []).map((item) => ({
+      id: item.id || "",
+      name: item.summary || item.id || "Unnamed calendar",
+      accessRole: item.accessRole || null,
+      primary: Boolean(item.primary),
+      matchesConfiguredId: item.id === auth.calendarId,
+    })),
+  };
 }
 
 export async function testGoogleCalendarConnection() {
