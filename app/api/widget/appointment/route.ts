@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isSlotAvailable } from "@/lib/availability";
 import { prisma } from "@/lib/prisma";
 import { sendLeadNotification } from "@/lib/notifications";
 import { corsHeadersFor, isAllowedWidgetOrigin, rateLimitWidget } from "@/lib/widget-security";
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
     if (!conversation?.agent.isActive) return NextResponse.json({ error: "Conversation not found." }, { status: 404, headers });
     if (!isAllowedWidgetOrigin(request, conversation.agent.business.websiteUrl)) return NextResponse.json({ error: "This website is not authorized to use this AARYVO agent." }, { status: 403, headers });
     if (!conversation.lead?.name || (!conversation.lead.phone && !conversation.lead.email)) return NextResponse.json({ error: "Contact details are required before booking." }, { status: 400, headers });
+
+    const available = await isSlotAvailable(conversation.agent.businessId, startsAt);
+    if (!available) return NextResponse.json({ error: "That time is no longer available. Please choose another slot." }, { status: 409, headers });
 
     const appointment = await prisma.appointment.create({ data: { businessId: conversation.agent.businessId, leadId: conversation.lead.id, startsAt, status: "REQUESTED", notes: conversation.lead.requirement } });
     await prisma.lead.update({ where: { id: conversation.lead.id }, data: { status: "QUALIFIED", score: Math.max(conversation.lead.score, 85) } });
