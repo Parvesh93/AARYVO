@@ -11,11 +11,12 @@ enum LeadStatus { NEW WARM HOT QUALIFIED WON LOST }
 enum ConversationChannel { WEBSITE WHATSAPP INSTAGRAM VOICE }
 
 model User {
-  id String @id @default(cuid())
-  name String?
-  email String @unique
-  createdAt DateTime @default(now())
-  businesses BusinessMember[]
+  id           String @id @default(cuid())
+  name         String?
+  email        String @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  businesses   BusinessMember[]
 }
 
 model Business {
