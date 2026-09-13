@@ -8,10 +8,15 @@ function base64Url(input: string | Buffer) {
   return Buffer.from(input).toString("base64").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 }
 
+function cleanEnv(value?: string) {
+  if (!value) return "";
+  return value.trim().replace(/^['\"]|['\"]$/g, "");
+}
+
 function credentials() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  const calendarId = process.env.GOOGLE_CALENDAR_ID;
+  const email = cleanEnv(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL);
+  const privateKey = cleanEnv(process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).replace(/\\n/g, "\n");
+  const calendarId = cleanEnv(process.env.GOOGLE_CALENDAR_ID);
   if (!email || !privateKey || !calendarId) return null;
   return { email, privateKey, calendarId };
 }
@@ -28,7 +33,7 @@ async function accessToken() {
   const response = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
+    body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth-grant-type:jwt-bearer".replace("oauth-grant", "oauth:grant"), assertion }),
     cache: "no-store",
   });
   if (!response.ok) {
