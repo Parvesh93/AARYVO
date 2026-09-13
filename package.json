@@ -2,15 +2,19 @@
   "name": "aaryvo",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
-    "@prisma/client": "^7.0.0",
+    "@prisma/adapter-mariadb": "^7.10.0",
+    "@prisma/client": "^7.10.0",
     "bcryptjs": "^3.0.2",
+    "dotenv": "^17.2.3",
     "jose": "^6.1.0",
     "lucide-react": "^0.468.0",
     "next": "^16.0.0",
@@ -25,7 +29,7 @@
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
     "eslint-config-next": "^16.0.0",
-    "prisma": "^7.0.0",
+    "prisma": "^7.10.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.0.0"
   }
