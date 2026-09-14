@@ -1,7 +1,29 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Flame, Trophy, Users } from "lucide-react";
+import LeadsTable from "./LeadsTable";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-function badge(status:string){return status==="HOT"||status==="QUALIFIED"?"bg-emerald-50 text-emerald-700":status==="WARM"?"bg-amber-50 text-amber-700":status==="WON"?"bg-blue-50 text-blue-700":status==="LOST"?"bg-red-50 text-red-700":"bg-black/[0.04] text-black/55";}
-export default async function LeadsPage(){const session=await requireSession();const member=await prisma.businessMember.findFirst({where:{userId:session.userId},select:{businessId:true}});if(!member)redirect("/onboarding");const leads=await prisma.lead.findMany({where:{businessId:member.businessId},orderBy:{createdAt:"desc"},take:100});const hot=leads.filter(l=>l.status==="HOT"||l.status==="QUALIFIED").length;return <div className="mx-auto max-w-[1400px]"><div className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-black/35">Sales pipeline</p><h1 className="mt-2 text-3xl font-semibold tracking-[-.04em] sm:text-4xl">Leads</h1><p className="mt-2 text-sm text-black/45">Every prospect captured and qualified by your AI employee.</p></div><div className="flex gap-2"><span className="rounded-full border border-black/[.07] bg-white px-4 py-2 text-xs text-black/55">{leads.length} total</span><span className="rounded-full bg-emerald-50 px-4 py-2 text-xs font-medium text-emerald-700">{hot} ready to follow up</span></div></div><div className="mt-7 overflow-hidden rounded-2xl border border-black/[.06] bg-white"><div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-black/[.018] text-xs text-black/35"><tr><th className="px-6 py-4 font-medium">Prospect</th><th className="px-4 py-4 font-medium">Requirement</th><th className="px-4 py-4 font-medium">Budget</th><th className="px-4 py-4 font-medium">Score</th><th className="px-4 py-4 font-medium">Status</th><th className="px-6 py-4"></th></tr></thead><tbody>{leads.length===0?<tr><td colSpan={6} className="px-6 py-16 text-center text-black/40">No leads captured yet. Your AI employee will add prospects here automatically.</td></tr>:leads.map(lead=><tr key={lead.id} className="border-t border-black/[.05] hover:bg-black/[.012]"><td className="px-6 py-4"><p className="font-medium">{lead.name||"Anonymous prospect"}</p><p className="mt-1 text-xs text-black/35">{lead.phone||lead.email||"Contact pending"}</p></td><td className="max-w-md px-4 py-4 text-black/60">{lead.requirement||"Qualification in progress"}</td><td className="px-4 py-4 text-black/55">{lead.budget||"—"}</td><td className="px-4 py-4"><span className="font-semibold">{lead.score}</span><span className="text-black/30">/100</span></td><td className="px-4 py-4"><span className={`rounded-full px-3 py-1.5 text-[11px] font-semibold ${badge(lead.status)}`}>{lead.status}</span></td><td className="px-6 py-4 text-right"><Link href={`/dashboard/leads/${lead.id}`} className="rounded-lg border border-black/[.08] px-3 py-2 text-xs font-medium hover:bg-black hover:text-white">View →</Link></td></tr>)}</tbody></table></div></div></div>}
+export default async function LeadsPage(){
+  const session=await requireSession();
+  const member=await prisma.businessMember.findFirst({where:{userId:session.userId},select:{businessId:true}});
+  if(!member)redirect("/onboarding");
+  const leads=await prisma.lead.findMany({where:{businessId:member.businessId},orderBy:{createdAt:"desc"},take:250});
+  const hot=leads.filter((lead)=>lead.status==="HOT"||lead.status==="QUALIFIED").length;
+  const won=leads.filter((lead)=>lead.status==="WON").length;
+  const serialized=leads.map((lead)=>({...lead,createdAt:lead.createdAt.toISOString()}));
+
+  return <div className="mx-auto max-w-[1440px] pb-8">
+    <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+      <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-black/35">Sales pipeline</p><h1 className="mt-2 text-3xl font-semibold tracking-[-.04em] sm:text-4xl">Leads</h1><p className="mt-2 text-sm text-black/45">Search, prioritize and follow up every prospect captured by your AI employee.</p></div>
+    </div>
+
+    <div className="mt-7 grid gap-3 sm:grid-cols-3">
+      <div className="rounded-2xl border border-black/[.055] bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-black/35">Total leads</p><p className="mt-2 text-3xl font-semibold tracking-[-.04em]">{leads.length}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f4f5f7] text-black/45"><Users size={17}/></span></div></div>
+      <div className="rounded-2xl border border-black/[.055] bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-black/35">High intent</p><p className="mt-2 text-3xl font-semibold tracking-[-.04em] text-emerald-700">{hot}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><Flame size={17}/></span></div></div>
+      <div className="rounded-2xl border border-black/[.055] bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-black/35">Won</p><p className="mt-2 text-3xl font-semibold tracking-[-.04em] text-blue-700">{won}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><Trophy size={17}/></span></div></div>
+    </div>
+
+    <LeadsTable leads={serialized}/>
+  </div>;
+}
