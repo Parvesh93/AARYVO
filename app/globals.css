@@ -9,9 +9,53 @@
 }
 
 * { box-sizing: border-box; }
-html { background: var(--bg); }
+html { background: var(--bg); scroll-behavior: smooth; }
 body { margin: 0; background: var(--bg); color: var(--ink); font-family: Arial, Helvetica, sans-serif; }
 
 @layer base {
   a { text-decoration: none; }
+}
+
+.landing-hero-copy { animation: landing-enter-left .8s cubic-bezier(.22,1,.36,1) both; }
+.landing-hero-panel { animation: landing-enter-right .9s .08s cubic-bezier(.22,1,.36,1) both; }
+.landing-glow { animation: landing-glow 7s ease-in-out infinite; }
+.landing-demo { transition: transform .45s cubic-bezier(.22,1,.36,1), box-shadow .45s ease; }
+.landing-demo:hover { transform: translateY(-5px); box-shadow: 0 38px 90px rgba(17,19,25,.13); }
+.landing-float { animation: landing-float 4.5s ease-in-out infinite; }
+.landing-live { animation: landing-live 2.4s ease-in-out infinite; }
+.landing-message { opacity: 0; transform: translateY(8px); animation: landing-message .5s cubic-bezier(.22,1,.36,1) forwards; }
+.landing-message-1 { animation-delay: .5s; }
+.landing-message-2 { animation-delay: .72s; }
+.landing-message-3 { animation-delay: .94s; }
+.landing-message-4 { animation-delay: 1.16s; }
+.landing-message-5 { animation-delay: 1.38s; }
+.landing-button { transition: transform .25s ease, box-shadow .25s ease, opacity .25s ease; }
+.landing-button:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(17,19,25,.10); }
+.landing-card { transition: transform .35s cubic-bezier(.22,1,.36,1), box-shadow .35s ease, border-color .35s ease; }
+.landing-card:hover { transform: translateY(-5px); box-shadow: 0 18px 50px rgba(17,19,25,.075); border-color: rgba(17,19,25,.12); }
+.landing-dark-card { transition: transform .3s ease, background-color .3s ease; }
+.landing-dark-card:hover { transform: translateX(5px); background-color: rgba(255,255,255,.09); }
+
+.reveal-section { opacity: 0; transform: translateY(28px); transition: opacity .75s cubic-bezier(.22,1,.36,1), transform .75s cubic-bezier(.22,1,.36,1); }
+.reveal-section.is-visible { opacity: 1; transform: translateY(0); }
+.reveal-child { opacity: 0; transform: translateY(18px); transition-property: opacity, transform, box-shadow, border-color; transition-duration: .65s, .65s, .35s, .35s; transition-timing-function: cubic-bezier(.22,1,.36,1); }
+.reveal-section.is-visible .reveal-child { opacity: 1; transform: translateY(0); }
+.reveal-section.is-visible .reveal-child.landing-card:hover { transform: translateY(-5px); }
+
+@keyframes landing-enter-left { from { opacity: 0; transform: translate3d(-20px,24px,0); } to { opacity: 1; transform: translate3d(0,0,0); } }
+@keyframes landing-enter-right { from { opacity: 0; transform: translate3d(25px,30px,0) scale(.98); } to { opacity: 1; transform: translate3d(0,0,0) scale(1); } }
+@keyframes landing-float { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-9px) rotate(1deg); } }
+@keyframes landing-glow { 0%,100% { opacity: .65; transform: translateX(-50%) scale(1); } 50% { opacity: 1; transform: translateX(-50%) scale(1.08); } }
+@keyframes landing-live { 0%,100% { opacity: .75; } 50% { opacity: 1; } }
+@keyframes landing-message { to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 767px) {
+  .landing-demo:hover, .landing-card:hover { transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .landing-hero-copy, .landing-hero-panel, .landing-glow, .landing-float, .landing-live, .landing-message { animation: none !important; opacity: 1; transform: none; }
+  .reveal-section, .reveal-child { opacity: 1; transform: none; transition: none; }
+  .landing-button, .landing-card, .landing-demo, .landing-dark-card { transition: none; }
 }
