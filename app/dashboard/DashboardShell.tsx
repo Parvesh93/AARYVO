@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { Bot, CalendarDays, ChevronDown, Database, Home, Menu, MessageCircle, Plug, Settings, Sparkles, Users, X } from "lucide-react";
+import { Bot, CalendarDays, ChevronDown, Database, Home, Inbox, Menu, MessageCircle, Plug, Settings, Sparkles, Users, X } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 
 type Props = { children: React.ReactNode; user: { name: string | null; email: string }; business: { name: string; websiteUrl: string | null } };
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: Home },
+  { href: "/dashboard/conversations", label: "Conversations", icon: Inbox },
   { href: "/dashboard/leads", label: "Leads", icon: Users },
   { href: "/dashboard/appointments", label: "Appointments", icon: CalendarDays },
   { href: "/dashboard/knowledge", label: "Knowledge", icon: Database },
