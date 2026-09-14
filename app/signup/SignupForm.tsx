@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
@@ -17,7 +18,7 @@ export default function SignupForm() {
       const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.get("name"), email: form.get("email"), password: form.get("password") }),
+        body: JSON.stringify({ name: form.get("name"), email: form.get("email"), password: form.get("password"), acceptedTerms: form.get("acceptedTerms") === "on" }),
       });
       const data = await response.json();
       if (!response.ok) {
@@ -36,9 +37,10 @@ export default function SignupForm() {
   return <>
     {error && <p className="mt-5 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
     <form onSubmit={submit} className="mt-8 space-y-4">
-      <input name="name" required placeholder="Your name" className="w-full rounded-2xl border border-black/10 px-5 py-4 outline-none focus:border-black/30" />
-      <input name="email" type="email" required placeholder="Work email" className="w-full rounded-2xl border border-black/10 px-5 py-4 outline-none focus:border-black/30" />
-      <input name="password" type="password" minLength={8} required placeholder="Password · minimum 8 characters" className="w-full rounded-2xl border border-black/10 px-5 py-4 outline-none focus:border-black/30" />
+      <input name="name" required autoComplete="name" placeholder="Your name" className="w-full rounded-2xl border border-black/10 px-5 py-4 outline-none focus:border-black/30" />
+      <input name="email" type="email" required autoComplete="email" placeholder="Work email" className="w-full rounded-2xl border border-black/10 px-5 py-4 outline-none focus:border-black/30" />
+      <input name="password" type="password" minLength={8} required autoComplete="new-password" placeholder="Password · minimum 8 characters" className="w-full rounded-2xl border border-black/10 px-5 py-4 outline-none focus:border-black/30" />
+      <label className="flex items-start gap-3 px-1 text-xs leading-5 text-black/50"><input name="acceptedTerms" type="checkbox" required className="mt-1"/><span>I agree to the <Link href="/terms" target="_blank" className="font-medium text-black underline underline-offset-2">Terms of Service</Link> and <Link href="/privacy" target="_blank" className="font-medium text-black underline underline-offset-2">Privacy Policy</Link>.</span></label>
       <button disabled={loading} className="w-full rounded-full bg-black px-6 py-4 font-medium text-white disabled:opacity-50">{loading ? "Creating account…" : "Create account"}</button>
     </form>
   </>;
