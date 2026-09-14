@@ -39,6 +39,10 @@ model Business {
   slug                      String @unique
   websiteUrl                String?
   notificationEmail         String?
+  notifyNewLead             Boolean @default(true)
+  notifyHotLead             Boolean @default(true)
+  notifyAppointment         Boolean @default(true)
+  notifyHumanAttention      Boolean @default(true)
   bookingTimeZone           String @default("Asia/Kolkata")
   bookingSlotMinutes        Int @default(30)
   bookingStartHour          Int @default(10)
@@ -110,17 +114,17 @@ model KnowledgeItem {
 }
 
 model Conversation {
-  id                 String @id @default(cuid())
-  agentId            String
-  channel            ConversationChannel @default(WEBSITE)
-  visitorId          String?
-  needsHuman         Boolean @default(false)
-  attentionReason    String? @db.Text
-  resolvedAt         DateTime?
-  startedAt          DateTime @default(now())
-  agent              Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  messages           Message[]
-  lead               Lead?
+  id              String @id @default(cuid())
+  agentId         String
+  channel         ConversationChannel @default(WEBSITE)
+  visitorId       String?
+  needsHuman      Boolean @default(false)
+  attentionReason String? @db.Text
+  resolvedAt      DateTime?
+  startedAt       DateTime @default(now())
+  agent           Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  lead            Lead?
   @@map("conversation")
 }
 
@@ -145,6 +149,9 @@ model Lead {
   budget         String?
   score          Int @default(0)
   status         LeadStatus @default(NEW)
+  followUpStatus String @default("PENDING")
+  followUpDueAt  DateTime?
+  followUpNote   String? @db.Text
   createdAt      DateTime @default(now())
   business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
