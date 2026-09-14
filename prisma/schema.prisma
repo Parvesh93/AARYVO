@@ -7,8 +7,21 @@ datasource db {
   provider = "mysql"
 }
 
-enum LeadStatus { NEW WARM HOT QUALIFIED WON LOST }
-enum ConversationChannel { WEBSITE WHATSAPP INSTAGRAM VOICE }
+enum LeadStatus {
+  NEW
+  WARM
+  HOT
+  QUALIFIED
+  WON
+  LOST
+}
+
+enum ConversationChannel {
+  WEBSITE
+  WHATSAPP
+  INSTAGRAM
+  VOICE
+}
 
 model User {
   id String @id @default(cuid())
