@@ -1,18 +1,22 @@
+import Link from "next/link";
 import { ArrowRight, Bot, CalendarCheck, MessageSquareText, Sparkles } from "lucide-react";
 
 export default function HomePage() {
   return (
     <main className="min-h-screen px-6 py-8 md:px-10">
       <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-black/5 bg-white px-6 py-4 shadow-sm">
-        <div className="font-semibold tracking-[0.28em]">AARYVO</div>
-        <a href="/onboarding" className="rounded-full bg-black px-5 py-3 text-sm font-medium text-white">Build your agent</a>
+        <Link href="/" className="font-semibold tracking-[0.28em]">AARYVO</Link>
+        <div className="flex items-center gap-2">
+          <Link href="/login" className="hidden rounded-full px-4 py-3 text-sm font-medium text-black/55 sm:block">Sign in</Link>
+          <Link href="/signup" className="rounded-full bg-black px-5 py-3 text-sm font-medium text-white">Build your agent</Link>
+        </div>
       </nav>
       <section className="mx-auto grid min-h-[78vh] max-w-7xl items-center gap-10 py-16 lg:grid-cols-[1.08fr_.92fr]">
         <div>
           <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-4 py-2 text-sm"><Sparkles size={16} /> AI employees for growing businesses</div>
           <h1 className="max-w-4xl text-6xl font-semibold leading-[0.95] tracking-[-0.055em] md:text-8xl">Turn conversations into customers.</h1>
           <p className="mt-7 max-w-2xl text-lg leading-8 text-black/55 md:text-xl">AARYVO answers enquiries, understands buying intent, qualifies leads and books appointments — 24/7.</p>
-          <div className="mt-9 flex flex-wrap gap-3"><a href="/onboarding" className="inline-flex items-center gap-2 rounded-full bg-black px-6 py-4 text-sm font-medium text-white">Create your AI employee <ArrowRight size={17} /></a><a href="/dashboard" className="rounded-full border border-black/10 bg-white px-6 py-4 text-sm font-medium">View demo dashboard</a></div>
+          <div className="mt-9 flex flex-wrap gap-3"><Link href="/signup" className="inline-flex items-center gap-2 rounded-full bg-black px-6 py-4 text-sm font-medium text-white">Create your AI employee <ArrowRight size={17} /></Link><Link href="/login" className="rounded-full border border-black/10 bg-white px-6 py-4 text-sm font-medium">Sign in</Link></div>
         </div>
         <div className="rounded-[36px] border border-black/5 bg-white p-5 shadow-2xl shadow-black/5">
           <div className="rounded-[28px] bg-[#111319] p-6 text-white">
@@ -22,6 +26,7 @@ export default function HomePage() {
           <div className="grid grid-cols-3 gap-3 pt-4">{[[MessageSquareText,"Converse"],[Bot,"Qualify"],[CalendarCheck,"Book"]].map(([Icon,label]) => { const I = Icon as typeof Bot; return <div key={label as string} className="rounded-2xl bg-[#f6f7fb] p-4"><I size={18}/><p className="mt-3 text-sm font-medium">{label as string}</p></div>; })}</div>
         </div>
       </section>
+      <footer className="mx-auto flex max-w-7xl flex-col gap-3 border-t border-black/[.06] py-8 text-xs text-black/40 sm:flex-row sm:items-center sm:justify-between"><p>© 2026 AARYVO. All rights reserved.</p><div className="flex gap-5"><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></footer>
     </main>
   );
 }
