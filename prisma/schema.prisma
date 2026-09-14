@@ -7,167 +7,164 @@ datasource db {
   provider = "mysql"
 }
 
-enum LeadStatus {
-  NEW
-  WARM
-  HOT
-  QUALIFIED
-  WON
-  LOST
-}
-
-enum ConversationChannel {
-  WEBSITE
-  WHATSAPP
-  INSTAGRAM
-  VOICE
-}
+enum LeadStatus { NEW WARM HOT QUALIFIED WON LOST }
+enum ConversationChannel { WEBSITE WHATSAPP INSTAGRAM VOICE }
 
 model User {
-  id           String @id @default(cuid())
-  name         String?
-  email        String @unique
+  id String @id @default(cuid())
+  name String?
+  email String @unique
   passwordHash String
-  createdAt    DateTime @default(now())
-  businesses   BusinessMember[]
+  createdAt DateTime @default(now())
+  businesses BusinessMember[]
   @@map("user")
 }
 
 model Business {
-  id                        String @id @default(cuid())
-  name                      String
-  slug                      String @unique
-  websiteUrl                String?
-  notificationEmail         String?
-  notifyNewLead             Boolean @default(true)
-  notifyHotLead             Boolean @default(true)
-  notifyAppointment         Boolean @default(true)
-  notifyHumanAttention      Boolean @default(true)
-  bookingTimeZone           String @default("Asia/Kolkata")
-  bookingSlotMinutes        Int @default(30)
-  bookingStartHour          Int @default(10)
-  bookingEndHour            Int @default(18)
-  bookingDaysAhead          Int @default(7)
-  bookingWorkingDays        String @default("1,2,3,4,5")
-  googleAccessToken         String? @db.Text
-  googleRefreshToken        String? @db.Text
-  googleTokenExpiresAt      DateTime?
-  googleCalendarId          String?
-  googleCalendarName        String?
-  googleAccountEmail        String?
+  id String @id @default(cuid())
+  name String
+  slug String @unique
+  websiteUrl String?
+  notificationEmail String?
+  notifyNewLead Boolean @default(true)
+  notifyHotLead Boolean @default(true)
+  notifyAppointment Boolean @default(true)
+  notifyHumanAttention Boolean @default(true)
+  plan String @default("FREE")
+  subscriptionStatus String @default("FREE")
+  razorpaySubscriptionId String? @unique
+  razorpayPlanId String?
+  subscriptionCurrentStart DateTime?
+  subscriptionCurrentEnd DateTime?
+  subscriptionCancelAtEnd Boolean @default(false)
+  monthlyConversationLimit Int @default(50)
+  usagePeriodStart DateTime?
+  usagePeriodEnd DateTime?
+  bookingTimeZone String @default("Asia/Kolkata")
+  bookingSlotMinutes Int @default(30)
+  bookingStartHour Int @default(10)
+  bookingEndHour Int @default(18)
+  bookingDaysAhead Int @default(7)
+  bookingWorkingDays String @default("1,2,3,4,5")
+  googleAccessToken String? @db.Text
+  googleRefreshToken String? @db.Text
+  googleTokenExpiresAt DateTime?
+  googleCalendarId String?
+  googleCalendarName String?
+  googleAccountEmail String?
   googleCalendarConnectedAt DateTime?
-  createdAt                 DateTime @default(now())
-  members                   BusinessMember[]
-  agents                    Agent[]
-  leads                     Lead[]
-  appointments              Appointment[]
+  createdAt DateTime @default(now())
+  members BusinessMember[]
+  agents Agent[]
+  leads Lead[]
+  appointments Appointment[]
   @@map("business")
 }
 
 model BusinessMember {
-  id         String @id @default(cuid())
-  userId     String
+  id String @id @default(cuid())
+  userId String
   businessId String
-  role       String @default("OWNER")
-  user       User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  @@unique([userId, businessId])
+  role String @default("OWNER")
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
+  @@unique([userId,businessId])
   @@map("businessmember")
 }
 
 model Agent {
-  id                     String @id @default(cuid())
-  businessId             String
-  name                   String
-  goal                   String
-  systemPrompt           String @db.Text
-  tone                   String @default("Professional")
+  id String @id @default(cuid())
+  businessId String
+  name String
+  goal String
+  systemPrompt String @db.Text
+  tone String @default("Professional")
   qualificationQuestions String? @db.Text
-  bookingScoreThreshold  Int @default(65)
-  handoffInstructions    String? @db.Text
-  widgetAccentColor      String @default("#111319")
-  widgetTheme            String @default("LIGHT")
-  widgetTitle            String @default("AARYVO")
-  widgetSubtitle         String @default("AI sales agent online")
-  widgetWelcomeMessage   String @default("Hi 👋 Thanks for sharing your details. How can I help you today?") @db.Text
-  widgetStartLabel       String @default("Start conversation →")
-  widgetBookLabel        String @default("Book a consultation")
-  widgetPosition         String @default("RIGHT")
-  widgetLauncherStyle    String @default("SPARKLE")
-  widgetShowPoweredBy    Boolean @default(true)
-  isActive               Boolean @default(true)
-  business               Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  conversations          Conversation[]
-  knowledgeItems         KnowledgeItem[]
+  bookingScoreThreshold Int @default(65)
+  handoffInstructions String? @db.Text
+  widgetAccentColor String @default("#111319")
+  widgetTheme String @default("LIGHT")
+  widgetTitle String @default("AARYVO")
+  widgetSubtitle String @default("AI sales agent online")
+  widgetWelcomeMessage String @default("Hi 👋 Thanks for sharing your details. How can I help you today?") @db.Text
+  widgetStartLabel String @default("Start conversation →")
+  widgetBookLabel String @default("Book a consultation")
+  widgetPosition String @default("RIGHT")
+  widgetLauncherStyle String @default("SPARKLE")
+  widgetShowPoweredBy Boolean @default(true)
+  isActive Boolean @default(true)
+  business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
+  conversations Conversation[]
+  knowledgeItems KnowledgeItem[]
   @@map("agent")
 }
 
 model KnowledgeItem {
-  id        String @id @default(cuid())
-  agentId   String
-  source    String
-  title     String?
-  content   String @db.LongText
+  id String @id @default(cuid())
+  agentId String
+  source String
+  title String?
+  content String @db.LongText
   createdAt DateTime @default(now())
-  agent     Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  agent Agent @relation(fields:[agentId],references:[id],onDelete:Cascade)
   @@map("knowledgeitem")
 }
 
 model Conversation {
-  id              String @id @default(cuid())
-  agentId         String
-  channel         ConversationChannel @default(WEBSITE)
-  visitorId       String?
-  needsHuman      Boolean @default(false)
+  id String @id @default(cuid())
+  agentId String
+  channel ConversationChannel @default(WEBSITE)
+  visitorId String?
+  needsHuman Boolean @default(false)
   attentionReason String? @db.Text
-  resolvedAt      DateTime?
-  startedAt       DateTime @default(now())
-  agent           Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  messages        Message[]
-  lead            Lead?
+  resolvedAt DateTime?
+  startedAt DateTime @default(now())
+  agent Agent @relation(fields:[agentId],references:[id],onDelete:Cascade)
+  messages Message[]
+  lead Lead?
   @@map("conversation")
 }
 
 model Message {
-  id             String @id @default(cuid())
+  id String @id @default(cuid())
   conversationId String
-  role           String
-  content        String @db.Text
-  createdAt      DateTime @default(now())
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role String
+  content String @db.Text
+  createdAt DateTime @default(now())
+  conversation Conversation @relation(fields:[conversationId],references:[id],onDelete:Cascade)
   @@map("message")
 }
 
 model Lead {
-  id             String @id @default(cuid())
-  businessId     String
+  id String @id @default(cuid())
+  businessId String
   conversationId String? @unique
-  name           String?
-  email          String?
-  phone          String?
-  requirement    String? @db.Text
-  budget         String?
-  score          Int @default(0)
-  status         LeadStatus @default(NEW)
+  name String?
+  email String?
+  phone String?
+  requirement String? @db.Text
+  budget String?
+  score Int @default(0)
+  status LeadStatus @default(NEW)
   followUpStatus String @default("PENDING")
-  followUpDueAt  DateTime?
-  followUpNote   String? @db.Text
-  createdAt      DateTime @default(now())
-  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  conversation   Conversation? @relation(fields: [conversationId], references: [id])
-  appointments   Appointment[]
+  followUpDueAt DateTime?
+  followUpNote String? @db.Text
+  createdAt DateTime @default(now())
+  business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
+  conversation Conversation? @relation(fields:[conversationId],references:[id])
+  appointments Appointment[]
   @@map("lead")
 }
 
 model Appointment {
-  id         String @id @default(cuid())
+  id String @id @default(cuid())
   businessId String
-  leadId     String?
-  startsAt   DateTime
-  status     String @default("REQUESTED")
-  notes      String? @db.Text
-  createdAt  DateTime @default(now())
-  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  lead       Lead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  leadId String?
+  startsAt DateTime
+  status String @default("REQUESTED")
+  notes String? @db.Text
+  createdAt DateTime @default(now())
+  business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
+  lead Lead? @relation(fields:[leadId],references:[id],onDelete:SetNull)
   @@map("appointment")
 }
