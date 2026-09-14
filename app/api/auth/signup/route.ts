@@ -9,9 +9,14 @@ export async function POST(request: Request) {
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const password = typeof body.password === "string" ? body.password : "";
+    const acceptedTerms = body.acceptedTerms === true;
 
     if (!name || !email || password.length < 8) {
       return NextResponse.json({ error: "Enter a valid name, email and password of at least 8 characters." }, { status: 400 });
+    }
+
+    if (!acceptedTerms) {
+      return NextResponse.json({ error: "Please accept the Terms of Service and Privacy Policy." }, { status: 400 });
     }
 
     const existing = await prisma.user.findUnique({ where: { email } });
