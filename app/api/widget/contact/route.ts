@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendLeadNotification } from "@/lib/notifications";
+import { getBusinessConversationUsage } from "@/lib/billing";
 import { corsHeadersFor, isAllowedWidgetOrigin, rateLimitWidget } from "@/lib/widget-security";
 
 export async function OPTIONS(request: Request) {
@@ -28,11 +29,14 @@ export async function POST(request: Request) {
     if (!agent) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
     if (!isAllowedWidgetOrigin(request, agent.business.websiteUrl)) return NextResponse.json({ error: "This website is not authorized to use this AARYVO agent." }, { status: 403, headers });
 
+    const quota=await getBusinessConversationUsage(agent.businessId);
+    if(!quota.allowed)return NextResponse.json({error:"This AI sales agent has reached its monthly conversation limit.",code:"CONVERSATION_LIMIT_REACHED",plan:quota.plan,limit:quota.limit},{status:402,headers});
+
     const conversation = await prisma.conversation.create({ data: { agentId: agent.id, channel: "WEBSITE", visitorId } });
     const lead = await prisma.lead.create({ data: { businessId: agent.businessId, conversationId: conversation.id, name, email: email || null, phone: phone || null, score: 15, status: "NEW", requirement: "Pre-chat contact captured; qualification pending." } });
     void sendLeadNotification({ businessId: agent.businessId, leadId: lead.id, event: "NEW_LEAD" });
 
-    return NextResponse.json({ conversationId: conversation.id, lead: { id: lead.id, status: lead.status, score: lead.score } }, { headers });
+    return NextResponse.json({ conversationId: conversation.id, lead: { id: lead.id, status: lead.status, score: lead.score },usage:{used:quota.usage+1,limit:quota.limit} }, { headers });
   } catch (error) {
     console.error("AARYVO widget contact capture error", error);
     return NextResponse.json({ error: "Contact details could not be saved." }, { status: 500, headers });
