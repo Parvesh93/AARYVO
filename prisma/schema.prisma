@@ -110,14 +110,17 @@ model KnowledgeItem {
 }
 
 model Conversation {
-  id        String @id @default(cuid())
-  agentId   String
-  channel   ConversationChannel @default(WEBSITE)
-  visitorId String?
-  startedAt DateTime @default(now())
-  agent     Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
-  messages  Message[]
-  lead      Lead?
+  id                 String @id @default(cuid())
+  agentId            String
+  channel            ConversationChannel @default(WEBSITE)
+  visitorId          String?
+  needsHuman         Boolean @default(false)
+  attentionReason    String? @db.Text
+  resolvedAt         DateTime?
+  startedAt          DateTime @default(now())
+  agent              Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  messages           Message[]
+  lead               Lead?
   @@map("conversation")
 }
 
