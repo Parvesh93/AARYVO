@@ -34,29 +34,29 @@ model User {
 }
 
 model Business {
-  id                       String @id @default(cuid())
-  name                     String
-  slug                     String @unique
-  websiteUrl               String?
-  notificationEmail        String?
-  bookingTimeZone          String @default("Asia/Kolkata")
-  bookingSlotMinutes       Int @default(30)
-  bookingStartHour         Int @default(10)
-  bookingEndHour           Int @default(18)
-  bookingDaysAhead         Int @default(7)
-  bookingWorkingDays       String @default("1,2,3,4,5")
-  googleAccessToken        String? @db.Text
-  googleRefreshToken       String? @db.Text
-  googleTokenExpiresAt     DateTime?
-  googleCalendarId         String?
-  googleCalendarName       String?
-  googleAccountEmail       String?
+  id                        String @id @default(cuid())
+  name                      String
+  slug                      String @unique
+  websiteUrl                String?
+  notificationEmail         String?
+  bookingTimeZone           String @default("Asia/Kolkata")
+  bookingSlotMinutes        Int @default(30)
+  bookingStartHour          Int @default(10)
+  bookingEndHour            Int @default(18)
+  bookingDaysAhead          Int @default(7)
+  bookingWorkingDays        String @default("1,2,3,4,5")
+  googleAccessToken         String? @db.Text
+  googleRefreshToken        String? @db.Text
+  googleTokenExpiresAt      DateTime?
+  googleCalendarId          String?
+  googleCalendarName        String?
+  googleAccountEmail        String?
   googleCalendarConnectedAt DateTime?
-  createdAt                DateTime @default(now())
-  members                  BusinessMember[]
-  agents                   Agent[]
-  leads                    Lead[]
-  appointments             Appointment[]
+  createdAt                 DateTime @default(now())
+  members                   BusinessMember[]
+  agents                    Agent[]
+  leads                     Lead[]
+  appointments              Appointment[]
   @@map("business")
 }
 
@@ -72,15 +72,19 @@ model BusinessMember {
 }
 
 model Agent {
-  id             String @id @default(cuid())
-  businessId     String
-  name           String
-  goal           String
-  systemPrompt   String @db.Text
-  isActive       Boolean @default(true)
-  business       Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  conversations  Conversation[]
-  knowledgeItems KnowledgeItem[]
+  id                     String @id @default(cuid())
+  businessId             String
+  name                   String
+  goal                   String
+  systemPrompt           String @db.Text
+  tone                   String @default("Professional")
+  qualificationQuestions String? @db.Text
+  bookingScoreThreshold  Int @default(65)
+  handoffInstructions    String? @db.Text
+  isActive               Boolean @default(true)
+  business               Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  conversations          Conversation[]
+  knowledgeItems         KnowledgeItem[]
   @@map("agent")
 }
 
