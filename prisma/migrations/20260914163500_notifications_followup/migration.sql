@@ -1,0 +1,10 @@
+ALTER TABLE `business`
+  ADD COLUMN `notifyNewLead` BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN `notifyHotLead` BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN `notifyAppointment` BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN `notifyHumanAttention` BOOLEAN NOT NULL DEFAULT true;
+
+ALTER TABLE `lead`
+  ADD COLUMN `followUpStatus` VARCHAR(191) NOT NULL DEFAULT 'PENDING',
+  ADD COLUMN `followUpDueAt` DATETIME(3) NULL,
+  ADD COLUMN `followUpNote` TEXT NULL;
