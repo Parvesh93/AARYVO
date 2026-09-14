@@ -81,6 +81,16 @@ model Agent {
   qualificationQuestions String? @db.Text
   bookingScoreThreshold  Int @default(65)
   handoffInstructions    String? @db.Text
+  widgetAccentColor      String @default("#111319")
+  widgetTheme            String @default("LIGHT")
+  widgetTitle            String @default("AARYVO")
+  widgetSubtitle         String @default("AI sales agent online")
+  widgetWelcomeMessage   String @default("Hi 👋 Thanks for sharing your details. How can I help you today?") @db.Text
+  widgetStartLabel       String @default("Start conversation →")
+  widgetBookLabel        String @default("Book a consultation")
+  widgetPosition         String @default("RIGHT")
+  widgetLauncherStyle    String @default("SPARKLE")
+  widgetShowPoweredBy    Boolean @default(true)
   isActive               Boolean @default(true)
   business               Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   conversations          Conversation[]
