@@ -7,8 +7,34 @@ const securityHeaders = [
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
 ];
 
+const configuredAppHost = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_APP_URL
+      ? new URL(process.env.NEXT_PUBLIC_APP_URL).host
+      : null;
+  } catch {
+    return null;
+  }
+})();
+
+const allowedOrigins = Array.from(
+  new Set(
+    [
+      configuredAppHost,
+      "aaryvo.ppdesigntech.com",
+      "forestgreen-giraffe-423360.hostingersite.com",
+      "localhost:3000",
+    ].filter((value): value is string => Boolean(value))
+  )
+);
+
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  experimental: {
+    serverActions: {
+      allowedOrigins,
+    },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
