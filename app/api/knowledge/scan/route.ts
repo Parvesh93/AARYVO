@@ -23,16 +23,21 @@ export async function POST() {
   try {
     const pages = await crawlWebsite(business.websiteUrl);
 
+    // Fetch website-source IDs in application code instead of using SQL LIKE/startsWith.
+    // Some production MySQL databases have mixed utf8mb4 collations, which makes
+    // LIKE comparisons fail with error 1267 even though normal equality works.
+    const existingSources = await prisma.knowledgeItem.findMany({
+      where: { agentId: agent.id },
+      select: { id: true, source: true },
+    });
+    const websiteSourceIds = existingSources
+      .filter((item) => /^https?:\/\//i.test(item.source))
+      .map((item) => item.id);
+
     await prisma.$transaction([
-      prisma.knowledgeItem.deleteMany({
-        where: {
-          agentId: agent.id,
-          OR: [
-            { source: { startsWith: "http://" } },
-            { source: { startsWith: "https://" } },
-          ],
-        },
-      }),
+      ...(websiteSourceIds.length
+        ? [prisma.knowledgeItem.deleteMany({ where: { id: { in: websiteSourceIds } } })]
+        : []),
       ...pages.map((page) =>
         prisma.knowledgeItem.create({
           data: {
