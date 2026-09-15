@@ -1,5 +1,6 @@
 "use client";
 
+// Premium AARYVO landing page.
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, CalendarCheck, Check, Menu, MessageSquareText, Sparkles, Target, X, ShieldCheck, WandSparkles } from "lucide-react";
