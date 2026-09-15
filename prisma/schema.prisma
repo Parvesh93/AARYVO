@@ -116,6 +116,9 @@ model Agent {
   widgetWhatsappMessage String @default("Hi, I was speaking with your AI assistant on your website and would like to continue the conversation on WhatsApp.") @db.Text
   widgetPosition String @default("RIGHT")
   widgetLauncherStyle String @default("SPARKLE")
+  widgetLauncherLabel String @default("Chat with us")
+  widgetLauncherAnimation String @default("PULSE")
+  widgetLauncherLabelEnabled Boolean @default(true)
   widgetShowPoweredBy Boolean @default(true)
   isActive Boolean @default(true)
   business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
