@@ -102,6 +102,10 @@ model Agent {
   widgetWelcomeMessage String @default("Hi 👋 Thanks for sharing your details. How can I help you today?") @db.Text
   widgetStartLabel String @default("Start conversation →")
   widgetBookLabel String @default("Book a consultation")
+  widgetWhatsappEnabled Boolean @default(false)
+  widgetWhatsappNumber String?
+  widgetWhatsappLabel String @default("Continue on WhatsApp")
+  widgetWhatsappMessage String @default("Hi, I was speaking with your AI assistant on your website and would like to continue the conversation on WhatsApp.") @db.Text
   widgetPosition String @default("RIGHT")
   widgetLauncherStyle String @default("SPARKLE")
   widgetShowPoweredBy Boolean @default(true)
