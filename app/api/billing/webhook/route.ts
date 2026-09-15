@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PLANS, planFromRazorpayPlanId, verifyWebhook } from "@/lib/billing";
+import { transitionByNewSubscription, transitionByOldSubscription, updateBillingTransition } from "@/lib/billing-upgrade";
 
 export async function POST(request: Request) {
   const raw = await request.text();
@@ -13,9 +14,42 @@ export async function POST(request: Request) {
     const sub = payload.payload?.subscription?.entity;
     if (!sub?.id) return NextResponse.json({ ok: true });
 
-    const business = await prisma.business.findUnique({ where: { razorpaySubscriptionId: sub.id } });
-    if (!business) return NextResponse.json({ ok: true });
+    const replacement = await transitionByNewSubscription(String(sub.id));
+    if (replacement) {
+      const plan = planFromRazorpayPlanId(String(sub.plan_id || ""));
+      const status = String(sub.status || event.replace("subscription.", ""));
+      const active = ["subscription.activated", "subscription.charged", "subscription.resumed"].includes(event) && ["active", "authenticated", "pending"].includes(status.toLowerCase());
+      const terminal = ["subscription.cancelled", "subscription.completed", "subscription.expired"].includes(event) || ["cancelled", "completed", "expired"].includes(status.toLowerCase());
 
+      if (active && plan) {
+        await prisma.business.update({
+          where: { id: replacement.businessId },
+          data: {
+            razorpaySubscriptionId: String(sub.id),
+            razorpayPlanId: String(sub.plan_id || ""),
+            plan,
+            monthlyConversationLimit: PLANS[plan].conversations,
+            subscriptionStatus: status,
+            subscriptionCancelAtEnd: false,
+            ...(sub.current_start ? { subscriptionCurrentStart: new Date(sub.current_start * 1000), usagePeriodStart: new Date(sub.current_start * 1000) } : {}),
+            ...(sub.current_end ? { subscriptionCurrentEnd: new Date(sub.current_end * 1000), usagePeriodEnd: new Date(sub.current_end * 1000) } : {}),
+          },
+        });
+        await updateBillingTransition(String(sub.id), "ACTIVE");
+      } else if (terminal) {
+        await updateBillingTransition(String(sub.id), "TERMINAL");
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    const business = await prisma.business.findUnique({ where: { razorpaySubscriptionId: sub.id } });
+    if (!business) {
+      const oldTransition = await transitionByOldSubscription(String(sub.id));
+      if (oldTransition) return NextResponse.json({ ok: true });
+      return NextResponse.json({ ok: true });
+    }
+
+    const transition = await transitionByOldSubscription(String(sub.id));
     const planId = String(sub.plan_id || business.razorpayPlanId || "");
     const plan = planFromRazorpayPlanId(planId);
     const status = String(sub.status || event.replace("subscription.", ""));
@@ -27,10 +61,10 @@ export async function POST(request: Request) {
       data: {
         subscriptionStatus: status,
         razorpayPlanId: planId || null,
-        ...(plan && active ? { plan, monthlyConversationLimit: PLANS[plan].conversations } : {}),
+        ...(plan && active && !transition ? { plan, monthlyConversationLimit: PLANS[plan].conversations } : {}),
         ...(sub.current_start ? { subscriptionCurrentStart: new Date(sub.current_start * 1000), usagePeriodStart: new Date(sub.current_start * 1000) } : {}),
         ...(sub.current_end ? { subscriptionCurrentEnd: new Date(sub.current_end * 1000), usagePeriodEnd: new Date(sub.current_end * 1000) } : {}),
-        ...(terminal ? { plan: "FREE", monthlyConversationLimit: PLANS.FREE.conversations, subscriptionCancelAtEnd: false } : { subscriptionCancelAtEnd: Boolean(sub.cancel_at_cycle_end) }),
+        ...(terminal && !transition ? { plan: "FREE", monthlyConversationLimit: PLANS.FREE.conversations, subscriptionCancelAtEnd: false } : { subscriptionCancelAtEnd: Boolean(sub.cancel_at_cycle_end) }),
       },
     });
 
