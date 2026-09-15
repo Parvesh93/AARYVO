@@ -2,104 +2,59 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  ArrowRight,
-  CalendarCheck,
-  Check,
-  Menu,
-  MessageSquareText,
-  ShieldCheck,
-  Sparkles,
-  Target,
-  WandSparkles,
-  X,
-} from "lucide-react";
+import { ArrowRight, CalendarCheck, Check, Menu, MessageSquareText, ShieldCheck, Sparkles, Target, WandSparkles, X } from "lucide-react";
 
 const features = [
-  {
-    number: "01",
-    eyebrow: "CONVERSE",
-    title: "Every enquiry gets a sharp answer.",
-    text: "AARYVO responds instantly using approved business knowledge — even when your team is offline.",
-    icon: MessageSquareText,
-  },
-  {
-    number: "02",
-    eyebrow: "QUALIFY",
-    title: "Know who is actually ready to buy.",
-    text: "The AI employee understands requirements, budget, urgency and intent — then surfaces your strongest leads.",
-    icon: Target,
-  },
-  {
-    number: "03",
-    eyebrow: "CONVERT",
-    title: "Move from chat to action without friction.",
-    text: "Guide visitors toward WhatsApp, consultations, services or the right next step from inside the conversation.",
-    icon: CalendarCheck,
-  },
+  { number: "01", eyebrow: "CONVERSE", title: "Every enquiry gets a sharp answer.", text: "AARYVO responds instantly using approved business knowledge — even when your team is offline.", icon: MessageSquareText },
+  { number: "02", eyebrow: "QUALIFY", title: "Know who is actually ready to buy.", text: "The AI employee understands requirements, budget, urgency and intent — then surfaces your strongest leads.", icon: Target },
+  { number: "03", eyebrow: "CONVERT", title: "Move from chat to action without friction.", text: "Guide visitors toward WhatsApp, consultations, services or the right next step from inside the conversation.", icon: CalendarCheck },
 ];
 
 const plans = [
-  {
-    name: "Free",
-    price: "₹0",
-    usage: "50 conversations / month",
-    features: ["AI website agent", "Lead capture", "AARYVO branding"],
-  },
-  {
-    name: "Starter",
-    price: "₹999",
-    usage: "500 conversations / month",
-    features: ["Lead qualification", "Conversation inbox", "Appointments & alerts"],
-    popular: true,
-  },
-  {
-    name: "Growth",
-    price: "₹2,499",
-    usage: "2,000 conversations / month",
-    features: ["Follow-up workflow", "Custom widget branding", "Higher conversation volume"],
-  },
-  {
-    name: "Pro",
-    price: "₹4,999",
-    usage: "5,000 conversations / month",
-    features: ["Highest usage limit", "Priority support", "Future premium integrations"],
-  },
+  { name: "Free", price: "₹0", usage: "50 conversations / month", note: "Explore the core AARYVO experience", features: ["AI website agent", "Website knowledge training", "Lead capture", "Conversation inbox", "Basic lead details", "AARYVO branding"] },
+  { name: "Starter", price: "₹999", usage: "500 conversations / month", note: "For businesses ready to capture more leads", features: ["Everything in Free", "AI lead qualification", "Hot & warm lead scoring", "Appointment capture", "Email lead alerts", "WhatsApp & human handoff", "Conversation history"], popular: true },
+  { name: "Growth", price: "₹2,499", usage: "2,000 conversations / month", note: "For teams turning AI into a sales channel", features: ["Everything in Starter", "Follow-up workflow", "Custom widget branding", "Advanced widget controls", "Custom launcher & animations", "Custom email sender / SMTP", "Rich AI responses & actions", "Priority support"] },
+  { name: "Pro", price: "₹4,999", usage: "5,000 conversations / month", note: "For high-volume websites and growing teams", features: ["Everything in Growth", "5,000 monthly conversations", "Full sales workflow toolkit", "Highest usage allowance", "Premium support", "Priority product assistance", "Early access to new capabilities"] },
 ];
 
-const proof = [
-  "Website-aware AI",
-  "Lead qualification",
-  "Human handoff",
-  "WhatsApp actions",
-  "Conversation inbox",
-  "Custom branding",
+const comparison = [
+  ["Monthly AI conversations", "50", "500", "2,000", "5,000"],
+  ["Website knowledge training", true, true, true, true],
+  ["Lead capture", true, true, true, true],
+  ["Conversation inbox", true, true, true, true],
+  ["AI lead qualification", false, true, true, true],
+  ["Hot & warm lead scoring", false, true, true, true],
+  ["Appointment capture", false, true, true, true],
+  ["Email lead alerts", false, true, true, true],
+  ["WhatsApp / human handoff", false, true, true, true],
+  ["Follow-up workflow", false, false, true, true],
+  ["Custom widget branding", false, false, true, true],
+  ["Advanced launcher controls", false, false, true, true],
+  ["Custom email sender / SMTP", false, false, true, true],
+  ["Rich AI actions", false, false, true, true],
+  ["Priority support", false, false, true, true],
 ];
+
+const proof = ["Website-aware AI", "Lead qualification", "Human handoff", "WhatsApp actions", "Conversation inbox", "Custom branding"];
 
 export default function HomePageClient() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
+    return () => { document.body.style.overflow = ""; };
   }, [menuOpen]);
 
   useEffect(() => {
     const items = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add("is-visible");
-            observer.unobserve(entry.target);
-          }
-        });
-      },
-      { threshold: 0.1, rootMargin: "0px 0px -50px 0px" },
-    );
-
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: "0px 0px -50px 0px" });
     items.forEach((item) => observer.observe(item));
     return () => observer.disconnect();
   }, []);
@@ -112,292 +67,45 @@ export default function HomePageClient() {
         <nav className="premium-nav mx-auto flex max-w-[1380px] items-center justify-between rounded-[22px] border border-black/10 bg-[#f9f7f1]/95 px-4 py-3 backdrop-blur-xl md:px-5">
           <Link href="/" onClick={closeMenu} className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-full bg-[#161616] text-sm font-semibold text-white">A</div>
-            <div>
-              <div className="text-[15px] font-semibold tracking-[.24em]">AARYVO</div>
-              <div className="text-[9px] uppercase tracking-[.16em] text-black/35">AI Sales OS</div>
-            </div>
+            <div><div className="text-[15px] font-semibold tracking-[.24em]">AARYVO</div><div className="text-[9px] uppercase tracking-[.16em] text-black/35">AI Sales OS</div></div>
           </Link>
-
-          <div className="hidden items-center gap-8 text-[13px] font-medium text-black/55 md:flex">
-            <a href="#platform">Platform</a>
-            <a href="#why">Why AARYVO</a>
-            <a href="#pricing">Pricing</a>
-            <Link href="/contact">Contact</Link>
-          </div>
-
-          <div className="hidden items-center gap-2 md:flex">
-            <Link href="/login" className="rounded-full px-4 py-2.5 text-sm font-medium text-black/55">Sign in</Link>
-            <Link href="/signup" className="premium-button inline-flex items-center gap-2 rounded-full bg-[#161616] px-5 py-2.5 text-sm font-medium text-white">
-              Start free <ArrowRight size={14} />
-            </Link>
-          </div>
-
-          <button
-            type="button"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            onClick={() => setMenuOpen((value) => !value)}
-            className="grid h-10 w-10 place-items-center rounded-full bg-black text-white md:hidden"
-          >
-            {menuOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
+          <div className="hidden items-center gap-8 text-[13px] font-medium text-black/55 md:flex"><a href="#platform">Platform</a><a href="#why">Why AARYVO</a><a href="#pricing">Pricing</a><Link href="/contact">Contact</Link></div>
+          <div className="hidden items-center gap-2 md:flex"><Link href="/login" className="rounded-full px-4 py-2.5 text-sm font-medium text-black/55">Sign in</Link><Link href="/signup" className="premium-button inline-flex items-center gap-2 rounded-full bg-[#161616] px-5 py-2.5 text-sm font-medium text-white">Start free <ArrowRight size={14} /></Link></div>
+          <button type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen((value) => !value)} className="grid h-10 w-10 place-items-center rounded-full bg-black text-white md:hidden">{menuOpen ? <X size={18} /> : <Menu size={18} />}</button>
         </nav>
-
         <div className={`fixed inset-0 z-[-1] md:hidden ${menuOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
-          <button
-            aria-label="Close menu"
-            onClick={closeMenu}
-            className={`absolute inset-0 bg-black/35 backdrop-blur-sm transition ${menuOpen ? "opacity-100" : "opacity-0"}`}
-          />
+          <button aria-label="Close menu" onClick={closeMenu} className={`absolute inset-0 bg-black/35 backdrop-blur-sm transition ${menuOpen ? "opacity-100" : "opacity-0"}`} />
           <div className={`absolute left-4 right-4 top-[82px] rounded-[26px] bg-[#f9f7f1] p-4 shadow-2xl transition-all ${menuOpen ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0"}`}>
-            <a onClick={closeMenu} href="#platform" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Platform <ArrowRight size={16} /></a>
-            <a onClick={closeMenu} href="#why" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Why AARYVO <ArrowRight size={16} /></a>
-            <a onClick={closeMenu} href="#pricing" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Pricing <ArrowRight size={16} /></a>
-            <Link href="/contact" onClick={closeMenu} className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Contact <ArrowRight size={16} /></Link>
-            <div className="my-3 h-px bg-black/10" />
-            <div className="grid gap-2">
-              <Link href="/login" onClick={closeMenu} className="rounded-full border border-black/10 px-5 py-3.5 text-center text-sm font-medium">Sign in</Link>
-              <Link href="/signup" onClick={closeMenu} className="rounded-full bg-black px-5 py-3.5 text-center text-sm font-medium text-white">Start free</Link>
-            </div>
+            <a onClick={closeMenu} href="#platform" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Platform <ArrowRight size={16} /></a><a onClick={closeMenu} href="#why" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Why AARYVO <ArrowRight size={16} /></a><a onClick={closeMenu} href="#pricing" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Pricing <ArrowRight size={16} /></a><Link href="/contact" onClick={closeMenu} className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Contact <ArrowRight size={16} /></Link>
+            <div className="my-3 h-px bg-black/10" /><div className="grid gap-2"><Link href="/login" onClick={closeMenu} className="rounded-full border border-black/10 px-5 py-3.5 text-center text-sm font-medium">Sign in</Link><Link href="/signup" onClick={closeMenu} className="rounded-full bg-black px-5 py-3.5 text-center text-sm font-medium text-white">Start free</Link></div>
           </div>
         </div>
       </header>
 
-      <section className="relative px-5 pb-16 pt-14 md:px-8 md:pb-24 md:pt-20">
-        <div className="mx-auto max-w-[1380px]">
-          <div className="grid gap-12 lg:grid-cols-[1.06fr_.94fr] lg:items-end">
-            <div className="landing-hero-copy">
-              <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/10 bg-[#ffdf67] px-4 py-2 text-[12px] font-semibold uppercase tracking-[.12em]">
-                <Sparkles size={14} /> AI employee for your website
-              </div>
-              <h1 className="premium-display max-w-[900px] text-[4rem] font-semibold leading-[.88] tracking-[-.065em] sm:text-[5.8rem] lg:text-[7.15rem]">
-                Turn website traffic into <span className="premium-underline">real conversations.</span>
-              </h1>
-              <p className="mt-8 max-w-2xl text-lg leading-8 text-black/55 md:text-xl">
-                AARYVO learns your business, talks to visitors, qualifies intent and moves the right people toward action — automatically.
-              </p>
-              <div className="mt-8 flex flex-wrap gap-3">
-                <Link href="/signup" className="premium-button inline-flex items-center gap-2 rounded-full bg-black px-6 py-4 text-sm font-semibold text-white">Start free <ArrowRight size={16} /></Link>
-                <a href="#platform" className="premium-button rounded-full border border-black/15 px-6 py-4 text-sm font-semibold">See it work</a>
-              </div>
-              <p className="mt-5 text-xs text-black/40">Free tier · no credit card · live in minutes</p>
-            </div>
+      <section className="relative px-5 pb-16 pt-14 md:px-8 md:pb-24 md:pt-20"><div className="mx-auto max-w-[1380px]"><div className="grid gap-12 lg:grid-cols-[1.06fr_.94fr] lg:items-end">
+        <div className="landing-hero-copy"><div className="mb-6 inline-flex items-center gap-2 rounded-full border border-black/10 bg-[#ffdf67] px-4 py-2 text-[12px] font-semibold uppercase tracking-[.12em]"><Sparkles size={14} /> AI employee for your website</div><h1 className="premium-display max-w-[900px] text-[4rem] font-semibold leading-[.88] tracking-[-.065em] sm:text-[5.8rem] lg:text-[7.15rem]">Turn website traffic into <span className="premium-underline">real conversations.</span></h1><p className="mt-8 max-w-2xl text-lg leading-8 text-black/55 md:text-xl">AARYVO learns your business, talks to visitors, qualifies intent and moves the right people toward action — automatically.</p><div className="mt-8 flex flex-wrap gap-3"><Link href="/signup" className="premium-button inline-flex items-center gap-2 rounded-full bg-black px-6 py-4 text-sm font-semibold text-white">Start free <ArrowRight size={16} /></Link><a href="#platform" className="premium-button rounded-full border border-black/15 px-6 py-4 text-sm font-semibold">See it work</a></div><p className="mt-5 text-xs text-black/40">Free tier · no credit card · live in minutes</p></div>
+        <div className="landing-hero-panel relative"><div className="hero-orbit absolute -right-10 -top-8 hidden h-24 w-24 rounded-full bg-[#ffdf67] lg:grid lg:place-items-center"><WandSparkles size={28} /></div><div className="premium-demo relative overflow-hidden rounded-[34px] bg-[#171717] p-4 text-white shadow-[0_30px_90px_rgba(0,0,0,.22)] sm:p-5"><div className="flex items-center justify-between px-2 py-2"><div><p className="text-[10px] uppercase tracking-[.18em] text-white/35">Live AI conversation</p><p className="mt-1 text-sm font-medium">Website visitor · New lead</p></div><div className="rounded-full bg-[#d7ff73]/10 px-3 py-1.5 text-[11px] text-[#d7ff73]">● online</div></div><div className="mt-8 space-y-3 rounded-[26px] bg-[#232323] p-4 sm:p-5"><div className="landing-message landing-message-1 max-w-[88%] rounded-[22px] rounded-bl-md bg-white/8 px-4 py-3 text-sm leading-6">Hi — what can I help you with today?</div><div className="landing-message landing-message-2 ml-auto max-w-[84%] rounded-[22px] rounded-br-md bg-[#ffdf67] px-4 py-3 text-sm leading-6 text-black">We need a Shopify redesign before Diwali.</div><div className="landing-message landing-message-3 max-w-[88%] rounded-[22px] rounded-bl-md bg-white/8 px-4 py-3 text-sm leading-6">Got it. Is this mainly a visual redesign, or do you also need CRO and custom functionality?</div><div className="landing-message landing-message-4 ml-auto max-w-[84%] rounded-[22px] rounded-br-md bg-white px-4 py-3 text-sm leading-6 text-black">Redesign + CRO. Budget is around ₹1.5 lakh.</div><div className="landing-message landing-message-5 max-w-[92%] rounded-[22px] rounded-bl-md bg-white/8 px-4 py-3 text-sm leading-6">That fits the right project range. I can help you continue on WhatsApp or request a consultation.</div><div className="landing-message landing-message-5 flex flex-wrap gap-2 pt-1"><span className="rounded-full bg-[#d7ff73] px-3 py-2 text-[11px] font-semibold text-black">Continue on WhatsApp</span><span className="rounded-full border border-white/15 px-3 py-2 text-[11px]">Book consultation</span></div></div><div className="mt-4 grid grid-cols-3 gap-2">{[["Intent", "High"], ["Budget", "₹1.5L"], ["Action", "Follow up"]].map(([label, value]) => <div key={label} className="rounded-2xl bg-white/[.06] p-3"><p className="text-[10px] text-white/35">{label}</p><p className={`mt-1 text-sm font-semibold ${label === "Intent" ? "text-[#d7ff73]" : ""}`}>{value}</p></div>)}</div></div></div>
+      </div></div></section>
 
-            <div className="landing-hero-panel relative">
-              <div className="hero-orbit absolute -right-10 -top-8 hidden h-24 w-24 rounded-full bg-[#ffdf67] lg:grid lg:place-items-center">
-                <WandSparkles size={28} />
-              </div>
-              <div className="premium-demo relative overflow-hidden rounded-[34px] bg-[#171717] p-4 text-white shadow-[0_30px_90px_rgba(0,0,0,.22)] sm:p-5">
-                <div className="flex items-center justify-between px-2 py-2">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[.18em] text-white/35">Live AI conversation</p>
-                    <p className="mt-1 text-sm font-medium">Website visitor · New lead</p>
-                  </div>
-                  <div className="rounded-full bg-[#d7ff73]/10 px-3 py-1.5 text-[11px] text-[#d7ff73]">● online</div>
-                </div>
+      <section className="border-y border-black/10 bg-[#ffdf67] py-4"><div className="premium-marquee whitespace-nowrap text-sm font-semibold uppercase tracking-[.13em] text-black/70">{[...proof, ...proof].map((item, index) => <span key={`${item}-${index}`} className="mx-8 inline-flex items-center gap-3"><span>✦</span>{item}</span>)}</div></section>
 
-                <div className="mt-8 space-y-3 rounded-[26px] bg-[#232323] p-4 sm:p-5">
-                  <div className="landing-message landing-message-1 max-w-[88%] rounded-[22px] rounded-bl-md bg-white/8 px-4 py-3 text-sm leading-6">Hi — what can I help you with today?</div>
-                  <div className="landing-message landing-message-2 ml-auto max-w-[84%] rounded-[22px] rounded-br-md bg-[#ffdf67] px-4 py-3 text-sm leading-6 text-black">We need a Shopify redesign before Diwali.</div>
-                  <div className="landing-message landing-message-3 max-w-[88%] rounded-[22px] rounded-bl-md bg-white/8 px-4 py-3 text-sm leading-6">Got it. Is this mainly a visual redesign, or do you also need CRO and custom functionality?</div>
-                  <div className="landing-message landing-message-4 ml-auto max-w-[84%] rounded-[22px] rounded-br-md bg-white px-4 py-3 text-sm leading-6 text-black">Redesign + CRO. Budget is around ₹1.5 lakh.</div>
-                  <div className="landing-message landing-message-5 max-w-[92%] rounded-[22px] rounded-bl-md bg-white/8 px-4 py-3 text-sm leading-6">That fits the right project range. I can help you continue on WhatsApp or request a consultation.</div>
-                  <div className="landing-message landing-message-5 flex flex-wrap gap-2 pt-1">
-                    <span className="rounded-full bg-[#d7ff73] px-3 py-2 text-[11px] font-semibold text-black">Continue on WhatsApp</span>
-                    <span className="rounded-full border border-white/15 px-3 py-2 text-[11px]">Book consultation</span>
-                  </div>
-                </div>
+      <section id="platform" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32"><div className="mx-auto max-w-[1380px]"><div className="grid gap-8 lg:grid-cols-[.72fr_1.28fr]"><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-black/35">The platform</p><h2 className="premium-display mt-4 max-w-md text-5xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">One AI employee. Three jobs done.</h2></div><p className="max-w-2xl self-end text-lg leading-8 text-black/50">AARYVO is designed around the moments that matter most on a business website: understanding intent, qualifying demand and moving visitors forward.</p></div><div className="mt-14 grid gap-4 lg:grid-cols-3">{features.map(({ number, eyebrow, title, text, icon: Icon }, index) => <article key={number} className={`reveal-child premium-feature-card min-h-[430px] rounded-[32px] border border-black/10 p-7 ${index === 1 ? "bg-[#171717] text-white" : "bg-[#f9f7f1]"}`} style={{ transitionDelay: `${index * 90}ms` }}><div className="flex items-center justify-between"><span className={`text-xs font-semibold tracking-[.15em] ${index === 1 ? "text-white/35" : "text-black/35"}`}>{number} / 03</span><div className={`grid h-11 w-11 place-items-center rounded-full ${index === 1 ? "bg-white/10" : "bg-[#ffdf67]"}`}><Icon size={19} /></div></div><div className="mt-24"><p className={`text-[11px] font-semibold tracking-[.16em] ${index === 1 ? "text-[#d7ff73]" : "text-black/40"}`}>{eyebrow}</p><h3 className="mt-4 text-3xl font-semibold leading-[1.04] tracking-[-.04em]">{title}</h3><p className={`mt-5 text-sm leading-7 ${index === 1 ? "text-white/45" : "text-black/50"}`}>{text}</p></div></article>)}</div></div></section>
 
-                <div className="mt-4 grid grid-cols-3 gap-2">
-                  {[["Intent", "High"], ["Budget", "₹1.5L"], ["Action", "Follow up"]].map(([label, value]) => (
-                    <div key={label} className="rounded-2xl bg-white/[.06] p-3">
-                      <p className="text-[10px] text-white/35">{label}</p>
-                      <p className={`mt-1 text-sm font-semibold ${label === "Intent" ? "text-[#d7ff73]" : ""}`}>{value}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <section id="why" data-reveal className="reveal-section px-5 pb-24 md:px-8 md:pb-32"><div className="mx-auto max-w-[1380px] overflow-hidden rounded-[40px] bg-[#171717] text-white"><div className="grid lg:grid-cols-2"><div className="p-8 md:p-12 lg:p-14"><p className="text-xs font-semibold uppercase tracking-[.18em] text-white/35">Why AARYVO</p><h2 className="premium-display mt-5 text-5xl font-semibold leading-[.94] tracking-[-.055em] sm:text-6xl">Your website shouldn&apos;t wait for your sales team.</h2><p className="mt-6 max-w-xl text-base leading-8 text-white/45">Most websites collect forms. AARYVO starts the conversation, understands what the visitor wants and keeps momentum going.</p><div className="mt-10 grid gap-3 sm:grid-cols-2">{[["24/7", "Always responding"], ["1 script", "Fast installation"], ["Private", "Business knowledge"], ["Human-ready", "Smart handoff"]].map(([a, b]) => <div key={a} className="rounded-[22px] border border-white/10 bg-white/[.045] p-5"><div className="text-2xl font-semibold text-[#d7ff73]">{a}</div><div className="mt-2 text-xs text-white/40">{b}</div></div>)}</div></div><div className="relative min-h-[520px] bg-[#d7ff73] p-7 text-black md:p-10"><div className="absolute right-7 top-7 rounded-full border border-black/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.12em]">Live dashboard</div><div className="mt-20 rounded-[30px] border border-black/10 bg-[#f9f7f1] p-5 shadow-[0_20px_60px_rgba(0,0,0,.12)]"><div className="flex items-center justify-between"><div><p className="text-[10px] uppercase tracking-[.15em] text-black/35">Sales command center</p><h3 className="mt-1 text-xl font-semibold">Today&apos;s pipeline</h3></div><ShieldCheck size={19} /></div><div className="mt-7 grid grid-cols-3 gap-2">{[["22", "Conversations"], ["17", "Leads"], ["4", "High intent"]].map(([n, l]) => <div key={l} className="rounded-2xl bg-black/[.04] p-4"><div className="text-2xl font-semibold">{n}</div><div className="mt-1 text-[10px] text-black/40">{l}</div></div>)}</div><div className="mt-5 rounded-2xl bg-black p-5 text-white"><div className="flex items-center justify-between"><span className="text-xs text-white/45">Lead quality</span><span className="text-xs text-[#d7ff73]">Live</span></div><div className="mt-5 space-y-4">{[["High intent", "72%"], ["Warm", "43%"], ["New", "26%"]].map(([label, width]) => <div key={label}><div className="mb-2 flex justify-between text-[11px]"><span>{label}</span><span className="text-white/40">{width}</span></div><div className="h-1.5 rounded-full bg-white/10"><div className="h-full rounded-full bg-[#d7ff73]" style={{ width }} /></div></div>)}</div></div></div></div></div></div></section>
 
-      <section className="border-y border-black/10 bg-[#ffdf67] py-4">
-        <div className="premium-marquee whitespace-nowrap text-sm font-semibold uppercase tracking-[.13em] text-black/70">
-          {[...proof, ...proof].map((item, index) => (
-            <span key={`${item}-${index}`} className="mx-8 inline-flex items-center gap-3"><span>✦</span>{item}</span>
-          ))}
-        </div>
-      </section>
+      <section data-reveal className="reveal-section px-5 py-20 md:px-8 md:py-28"><div className="mx-auto max-w-[1380px]"><div className="grid gap-10 lg:grid-cols-[.85fr_1.15fr] lg:items-end"><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-black/35">Set up once</p><h2 className="premium-display mt-4 text-5xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">Live before your next coffee.</h2></div><div className="grid gap-3 sm:grid-cols-3">{[["01", "Add your website"], ["02", "Let AARYVO learn"], ["03", "Install the widget"]].map(([number, title], index) => <div key={number} className="reveal-child border-t border-black/15 pt-4" style={{ transitionDelay: `${index * 80}ms` }}><p className="text-[10px] font-semibold text-black/35">{number}</p><p className="mt-3 text-lg font-semibold">{title}</p></div>)}</div></div></div></section>
 
-      <section id="platform" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32">
-        <div className="mx-auto max-w-[1380px]">
-          <div className="grid gap-8 lg:grid-cols-[.72fr_1.28fr]">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[.18em] text-black/35">The platform</p>
-              <h2 className="premium-display mt-4 max-w-md text-5xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">One AI employee. Three jobs done.</h2>
-            </div>
-            <p className="max-w-2xl self-end text-lg leading-8 text-black/50">AARYVO is designed around the moments that matter most on a business website: understanding intent, qualifying demand and moving visitors forward.</p>
-          </div>
+      <section id="pricing" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32"><div className="mx-auto max-w-[1380px]">
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.18em] text-black/35">Pricing</p><h2 className="premium-display mt-4 text-5xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">A complete AI sales employee, from ₹0.</h2></div><p className="max-w-md text-sm leading-7 text-black/45">Start free, then scale as AARYVO becomes part of your sales workflow. Paid prices include GST.</p></div>
+        <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{plans.map((plan, index) => <article key={plan.name} className={`reveal-child premium-price-card relative flex min-h-[650px] flex-col rounded-[30px] border p-6 ${plan.popular ? "border-black bg-[#171717] text-white shadow-[0_28px_70px_rgba(0,0,0,.15)]" : "border-black/10 bg-[#f9f7f1]"}`} style={{ transitionDelay: `${index * 70}ms` }}>{plan.popular && <div className="absolute right-5 top-5 rounded-full bg-[#d7ff73] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[.12em] text-black">Most popular</div>}<p className={`text-xs font-semibold uppercase tracking-[.14em] ${plan.popular ? "text-white/40" : "text-black/35"}`}>{plan.name}</p><div className="mt-7 flex items-end gap-1"><span className="text-4xl font-semibold tracking-[-.05em]">{plan.price}</span><span className={`pb-1 text-xs ${plan.popular ? "text-white/35" : "text-black/35"}`}>/month</span></div><p className={`mt-3 text-xs font-medium ${plan.popular ? "text-[#d7ff73]" : "text-black/50"}`}>{plan.usage}</p><p className={`mt-4 min-h-10 text-xs leading-5 ${plan.popular ? "text-white/40" : "text-black/40"}`}>{plan.note}</p><div className={`my-6 h-px ${plan.popular ? "bg-white/10" : "bg-black/10"}`} /><div className="flex-1 space-y-3">{plan.features.map((feature) => <div key={feature} className={`flex gap-2.5 text-[13px] leading-5 ${plan.popular ? "text-white/65" : "text-black/60"}`}><span className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full ${plan.popular ? "bg-[#d7ff73] text-black" : "bg-black text-white"}`}><Check size={10} strokeWidth={3} /></span>{feature}</div>)}</div><Link href="/signup" className={`premium-button mt-8 block rounded-full px-5 py-3.5 text-center text-sm font-semibold ${plan.popular ? "bg-[#d7ff73] text-black" : "bg-black text-white"}`}>{plan.name === "Free" ? "Start free" : `Choose ${plan.name}`}</Link></article>)}</div>
 
-          <div className="mt-14 grid gap-4 lg:grid-cols-3">
-            {features.map(({ number, eyebrow, title, text, icon: Icon }, index) => (
-              <article
-                key={number}
-                className={`reveal-child premium-feature-card min-h-[430px] rounded-[32px] border border-black/10 p-7 ${index === 1 ? "bg-[#171717] text-white" : "bg-[#f9f7f1]"}`}
-                style={{ transitionDelay: `${index * 90}ms` }}
-              >
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-semibold tracking-[.15em] ${index === 1 ? "text-white/35" : "text-black/35"}`}>{number} / 03</span>
-                  <div className={`grid h-11 w-11 place-items-center rounded-full ${index === 1 ? "bg-white/10" : "bg-[#ffdf67]"}`}><Icon size={19} /></div>
-                </div>
-                <div className="mt-24">
-                  <p className={`text-[11px] font-semibold tracking-[.16em] ${index === 1 ? "text-[#d7ff73]" : "text-black/40"}`}>{eyebrow}</p>
-                  <h3 className="mt-4 text-3xl font-semibold leading-[1.04] tracking-[-.04em]">{title}</h3>
-                  <p className={`mt-5 text-sm leading-7 ${index === 1 ? "text-white/45" : "text-black/50"}`}>{text}</p>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
+        <div className="mt-16 overflow-hidden rounded-[32px] border border-black/10 bg-[#f9f7f1]"><div className="border-b border-black/10 px-6 py-7 md:px-8"><p className="text-xs font-semibold uppercase tracking-[.16em] text-black/35">Compare plans</p><div className="mt-2 flex flex-col gap-2 md:flex-row md:items-end md:justify-between"><h3 className="text-3xl font-semibold tracking-[-.04em]">Everything you need to turn chats into pipeline.</h3><p className="text-xs text-black/40">No setup fee · Cancel anytime</p></div></div><div className="overflow-x-auto"><div className="min-w-[820px]"><div className="grid grid-cols-[1.7fr_repeat(4,1fr)] border-b border-black/10 bg-black/[.025] px-6 py-4 text-xs font-semibold md:px-8"><div>Capability</div>{plans.map((plan) => <div key={plan.name} className="text-center">{plan.name}</div>)}</div>{comparison.map(([label, free, starter, growth, pro]) => <div key={String(label)} className="grid grid-cols-[1.7fr_repeat(4,1fr)] items-center border-b border-black/[.06] px-6 py-4 text-sm last:border-0 md:px-8"><div className="font-medium text-black/65">{label}</div>{[free, starter, growth, pro].map((value, index) => <div key={index} className="flex justify-center">{typeof value === "boolean" ? value ? <span className="grid h-6 w-6 place-items-center rounded-full bg-black text-white"><Check size={13} /></span> : <span className="text-black/20">—</span> : <span className="font-semibold">{value}</span>}</div>)}</div>)}</div></div></div>
+        <div className="mt-5 flex flex-col gap-3 rounded-[24px] bg-[#ffdf67] px-6 py-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-semibold">All paid plans include the core AARYVO sales workflow.</p><p className="mt-1 text-xs text-black/50">Upgrade as conversation volume and your sales operation grow.</p></div><Link href="/signup" className="inline-flex items-center gap-2 text-sm font-semibold">Start with AARYVO <ArrowRight size={15} /></Link></div>
+      </div></section>
 
-      <section id="why" data-reveal className="reveal-section px-5 pb-24 md:px-8 md:pb-32">
-        <div className="mx-auto max-w-[1380px] overflow-hidden rounded-[40px] bg-[#171717] text-white">
-          <div className="grid lg:grid-cols-2">
-            <div className="p-8 md:p-12 lg:p-14">
-              <p className="text-xs font-semibold uppercase tracking-[.18em] text-white/35">Why AARYVO</p>
-              <h2 className="premium-display mt-5 text-5xl font-semibold leading-[.94] tracking-[-.055em] sm:text-6xl">Your website shouldn&apos;t wait for your sales team.</h2>
-              <p className="mt-6 max-w-xl text-base leading-8 text-white/45">Most websites collect forms. AARYVO starts the conversation, understands what the visitor wants and keeps momentum going.</p>
-              <div className="mt-10 grid gap-3 sm:grid-cols-2">
-                {[["24/7", "Always responding"], ["1 script", "Fast installation"], ["Private", "Business knowledge"], ["Human-ready", "Smart handoff"]].map(([value, label]) => (
-                  <div key={value} className="rounded-[22px] border border-white/10 bg-white/[.045] p-5">
-                    <div className="text-2xl font-semibold text-[#d7ff73]">{value}</div>
-                    <div className="mt-2 text-xs text-white/40">{label}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+      <section className="px-5 pb-20 pt-6 md:px-8 md:pb-28"><div className="mx-auto max-w-[1380px] rounded-[40px] bg-[#ffdf67] px-7 py-14 md:px-12 md:py-20"><div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end"><div><p className="text-xs font-semibold uppercase tracking-[.17em] text-black/45">Your next lead is already on your website</p><h2 className="premium-display mt-4 max-w-4xl text-5xl font-semibold leading-[.92] tracking-[-.06em] sm:text-7xl">Give them someone worth talking to.</h2></div><Link href="/signup" className="premium-button inline-flex items-center justify-center gap-2 rounded-full bg-black px-7 py-4 text-sm font-semibold text-white">Start free <ArrowRight size={16} /></Link></div></div></section>
 
-            <div className="relative min-h-[520px] bg-[#d7ff73] p-7 text-black md:p-10">
-              <div className="absolute right-7 top-7 rounded-full border border-black/15 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.12em]">Live dashboard</div>
-              <div className="mt-20 rounded-[30px] border border-black/10 bg-[#f9f7f1] p-5 shadow-[0_20px_60px_rgba(0,0,0,.12)]">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] uppercase tracking-[.15em] text-black/35">Sales command center</p>
-                    <h3 className="mt-1 text-xl font-semibold">Today&apos;s pipeline</h3>
-                  </div>
-                  <ShieldCheck size={19} />
-                </div>
-                <div className="mt-7 grid grid-cols-3 gap-2">
-                  {[["22", "Conversations"], ["17", "Leads"], ["4", "High intent"]].map(([value, label]) => (
-                    <div key={label} className="rounded-2xl bg-black/[.04] p-4">
-                      <div className="text-2xl font-semibold">{value}</div>
-                      <div className="mt-1 text-[10px] text-black/40">{label}</div>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-5 rounded-2xl bg-black p-5 text-white">
-                  <div className="flex items-center justify-between"><span className="text-xs text-white/45">Lead quality</span><span className="text-xs text-[#d7ff73]">Live</span></div>
-                  <div className="mt-5 space-y-4">
-                    {[["High intent", "72%"], ["Warm", "43%"], ["New", "26%"]].map(([label, width]) => (
-                      <div key={label}>
-                        <div className="mb-2 flex justify-between text-[11px]"><span>{label}</span><span className="text-white/40">{width}</span></div>
-                        <div className="h-1.5 rounded-full bg-white/10"><div className="h-full rounded-full bg-[#d7ff73]" style={{ width }} /></div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section data-reveal className="reveal-section px-5 py-20 md:px-8 md:py-28">
-        <div className="mx-auto max-w-[1380px]">
-          <div className="grid gap-10 lg:grid-cols-[.85fr_1.15fr] lg:items-end">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[.18em] text-black/35">Set up once</p>
-              <h2 className="premium-display mt-4 text-5xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">Live before your next coffee.</h2>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {[["01", "Add your website"], ["02", "Let AARYVO learn"], ["03", "Install the widget"]].map(([number, title], index) => (
-                <div key={number} className="reveal-child border-t border-black/15 pt-4" style={{ transitionDelay: `${index * 80}ms` }}>
-                  <p className="text-[10px] font-semibold text-black/35">{number}</p>
-                  <p className="mt-3 text-lg font-semibold">{title}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="pricing" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32">
-        <div className="mx-auto max-w-[1380px]">
-          <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[.18em] text-black/35">Pricing</p>
-              <h2 className="premium-display mt-4 text-5xl font-semibold leading-[.95] tracking-[-.055em] sm:text-6xl">Start small. Scale with demand.</h2>
-            </div>
-            <p className="max-w-md text-sm leading-7 text-black/45">Simple monthly pricing based on conversation volume. GST included in paid plan prices.</p>
-          </div>
-
-          <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {plans.map((plan, index) => (
-              <article
-                key={plan.name}
-                className={`reveal-child premium-price-card relative rounded-[30px] border p-6 ${plan.popular ? "border-black bg-[#171717] text-white" : "border-black/10 bg-[#f9f7f1]"}`}
-                style={{ transitionDelay: `${index * 70}ms` }}
-              >
-                {plan.popular && <div className="absolute right-5 top-5 rounded-full bg-[#d7ff73] px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[.12em] text-black">Most popular</div>}
-                <p className={`text-xs font-semibold uppercase tracking-[.14em] ${plan.popular ? "text-white/40" : "text-black/35"}`}>{plan.name}</p>
-                <div className="mt-8 flex items-end gap-1"><span className="text-4xl font-semibold tracking-[-.05em]">{plan.price}</span><span className={`pb-1 text-xs ${plan.popular ? "text-white/35" : "text-black/35"}`}>/month</span></div>
-                <p className={`mt-3 text-xs ${plan.popular ? "text-white/40" : "text-black/40"}`}>{plan.usage}</p>
-                <div className={`my-7 h-px ${plan.popular ? "bg-white/10" : "bg-black/10"}`} />
-                <div className="space-y-3">
-                  {plan.features.map((feature) => (
-                    <div key={feature} className={`flex gap-2 text-sm ${plan.popular ? "text-white/60" : "text-black/55"}`}><Check size={15} />{feature}</div>
-                  ))}
-                </div>
-                <Link href="/signup" className={`premium-button mt-8 block rounded-full px-5 py-3.5 text-center text-sm font-semibold ${plan.popular ? "bg-[#d7ff73] text-black" : "bg-black text-white"}`}>Get started</Link>
-              </article>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <section className="px-5 pb-20 pt-6 md:px-8 md:pb-28">
-        <div className="mx-auto max-w-[1380px] rounded-[40px] bg-[#ffdf67] px-7 py-14 md:px-12 md:py-20">
-          <div className="grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[.17em] text-black/45">Your next lead is already on your website</p>
-              <h2 className="premium-display mt-4 max-w-4xl text-5xl font-semibold leading-[.92] tracking-[-.06em] sm:text-7xl">Give them someone worth talking to.</h2>
-            </div>
-            <Link href="/signup" className="premium-button inline-flex items-center justify-center gap-2 rounded-full bg-black px-7 py-4 text-sm font-semibold text-white">Start free <ArrowRight size={16} /></Link>
-          </div>
-        </div>
-      </section>
-
-      <footer className="border-t border-black/10 bg-[#171717] px-5 py-12 text-white md:px-8">
-        <div className="mx-auto max-w-[1380px]">
-          <div className="grid gap-10 md:grid-cols-[1.2fr_.8fr_.8fr]">
-            <div>
-              <div className="text-lg font-semibold tracking-[.24em]">AARYVO</div>
-              <p className="mt-3 max-w-sm text-sm leading-6 text-white/40">AI sales employees for businesses that want every website conversation to move somewhere useful.</p>
-              <p className="mt-5 text-xs leading-6 text-white/35">AARYVO is a product of <span className="text-white/60">PP DESIGN AND TECH</span>.<br />Payments and GST invoices are issued by PP DESIGN AND TECH.<br />GSTIN: 07CQXPP5370D1ZB</p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[.15em] text-white/30">Product</p>
-              <div className="mt-4 grid gap-3 text-sm text-white/55"><a href="#platform">Platform</a><a href="#why">Why AARYVO</a><a href="#pricing">Pricing</a><Link href="/login">Sign in</Link></div>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[.15em] text-white/30">Company & legal</p>
-              <div className="mt-4 grid gap-3 text-sm text-white/55"><Link href="/contact">Contact</Link><Link href="/privacy">Privacy Policy</Link><Link href="/terms">Terms of Service</Link><Link href="/refund-policy">Refund Policy</Link><Link href="/cancellation-policy">Cancellation Policy</Link><Link href="/shipping-policy">Shipping Policy</Link></div>
-            </div>
-          </div>
-          <div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/30 sm:flex-row sm:items-center sm:justify-between"><span>© 2026 PP DESIGN AND TECH. All rights reserved.</span><span>AARYVO · Built for better conversations.</span></div>
-        </div>
-      </footer>
+      <footer className="border-t border-black/10 bg-[#171717] px-5 py-12 text-white md:px-8"><div className="mx-auto max-w-[1380px]"><div className="grid gap-10 md:grid-cols-[1.2fr_.8fr_.8fr]"><div><div className="text-lg font-semibold tracking-[.24em]">AARYVO</div><p className="mt-3 max-w-sm text-sm leading-6 text-white/40">AI sales employees for businesses that want every website conversation to move somewhere useful.</p><p className="mt-5 text-xs leading-6 text-white/35">AARYVO is a product of <span className="text-white/60">PP DESIGN AND TECH</span>.<br />Payments and GST invoices are issued by PP DESIGN AND TECH.<br />GSTIN: 07CQXPP5370D1ZB</p></div><div><p className="text-xs font-semibold uppercase tracking-[.15em] text-white/30">Product</p><div className="mt-4 grid gap-3 text-sm text-white/55"><a href="#platform">Platform</a><a href="#why">Why AARYVO</a><a href="#pricing">Pricing</a><Link href="/login">Sign in</Link></div></div><div><p className="text-xs font-semibold uppercase tracking-[.15em] text-white/30">Company & legal</p><div className="mt-4 grid gap-3 text-sm text-white/55"><Link href="/contact">Contact</Link><Link href="/privacy">Privacy Policy</Link><Link href="/terms">Terms of Service</Link><Link href="/refund-policy">Refund Policy</Link><Link href="/cancellation-policy">Cancellation Policy</Link><Link href="/shipping-policy">Shipping Policy</Link></div></div></div><div className="mt-10 flex flex-col gap-3 border-t border-white/10 pt-6 text-xs text-white/30 sm:flex-row sm:items-center sm:justify-between"><span>© 2026 PP DESIGN AND TECH. All rights reserved.</span><span>AARYVO · Built for better conversations.</span></div></div></footer>
     </main>
   );
 }
