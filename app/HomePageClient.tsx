@@ -2,199 +2,31 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import {
-  ArrowRight,
-  Bot,
-  CalendarCheck,
-  Check,
-  Clock3,
-  Menu,
-  MessageSquareText,
-  MousePointerClick,
-  Sparkles,
-  Target,
-  X,
-  Zap,
-} from "lucide-react";
+import { ArrowRight, Bot, CalendarCheck, Check, Clock3, Menu, MessageSquareText, MousePointerClick, Sparkles, Target, X, Zap } from "lucide-react";
 
-const features = [
-  { icon: MessageSquareText, title: "Answers every enquiry", text: "Give visitors instant, business-aware responses instead of making them wait for your team." },
-  { icon: Target, title: "Qualifies buying intent", text: "AARYVO asks the right questions, understands requirements and identifies your strongest opportunities." },
-  { icon: CalendarCheck, title: "Books appointments", text: "Turn qualified conversations into scheduled calls automatically with Google Calendar integration." },
-  { icon: Clock3, title: "Works 24/7", text: "Your AI sales employee keeps responding and capturing leads even when your team is offline." },
-];
+const features=[{icon:MessageSquareText,title:"Answers every enquiry",text:"Give visitors instant, business-aware responses instead of making them wait for your team."},{icon:Target,title:"Qualifies buying intent",text:"AARYVO asks the right questions, understands requirements and identifies your strongest opportunities."},{icon:CalendarCheck,title:"Books appointments",text:"Turn qualified conversations into scheduled calls automatically with Google Calendar integration."},{icon:Clock3,title:"Works 24/7",text:"Your AI sales employee keeps responding and capturing leads even when your team is offline."}];
+const steps=[["01","Connect your website","Tell AARYVO where your business lives online."],["02","It learns your business","We scan your useful pages and build a private knowledge base."],["03","Install one line of code","Add the widget to your site and your AI sales employee goes live."]];
+const plans=[{name:"Free",price:"₹0",usage:"50 conversations / month",features:["AI website agent","Lead capture","AARYVO branding"]},{name:"Starter",price:"₹999",usage:"500 conversations / month",features:["Lead qualification","Conversation inbox","Appointments & alerts"],popular:true},{name:"Growth",price:"₹2,499",usage:"2,000 conversations / month",features:["Follow-up workflow","Google Calendar","Custom widget branding"]},{name:"Pro",price:"₹4,999",usage:"5,000 conversations / month",features:["Highest usage limit","Priority support","Future premium integrations"]}];
 
-const steps = [
-  ["01", "Connect your website", "Tell AARYVO where your business lives online."],
-  ["02", "It learns your business", "We scan your useful pages and build a private knowledge base."],
-  ["03", "Install one line of code", "Add the widget to your site and your AI sales employee goes live."],
-];
+export default function HomePageClient(){
+ const [menuOpen,setMenuOpen]=useState(false);
+ useEffect(()=>{document.body.style.overflow=menuOpen?"hidden":"";return()=>{document.body.style.overflow=""}},[menuOpen]);
+ useEffect(()=>{const items=Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));const observer=new IntersectionObserver(entries=>{entries.forEach(entry=>{if(entry.isIntersecting){entry.target.classList.add("is-visible");observer.unobserve(entry.target)}})},{threshold:.12,rootMargin:"0px 0px -60px 0px"});items.forEach(item=>observer.observe(item));return()=>observer.disconnect()},[]);
+ const closeMenu=()=>setMenuOpen(false);
+ return <main className="min-h-screen overflow-hidden bg-[#f6f7fb] text-[#111319]">
+  <div className="relative z-50 px-5 pt-5 md:px-8 md:pt-7"><nav className="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-black/[.06] bg-white/95 px-5 py-3.5 shadow-[0_8px_30px_rgba(17,19,25,.05)] backdrop-blur md:px-6"><Link href="/" className="flex items-center gap-3" onClick={closeMenu}><div className="grid h-9 w-9 place-items-center rounded-xl bg-black text-sm font-semibold text-white">A</div><div><div className="text-sm font-semibold tracking-[0.22em]">AARYVO</div><div className="hidden text-[10px] text-black/35 sm:block">AI SALES EMPLOYEE</div></div></Link><div className="hidden items-center gap-7 text-sm text-black/55 md:flex"><a href="#features">Features</a><a href="#how-it-works">How it works</a><a href="#pricing">Pricing</a></div><div className="hidden items-center gap-2 md:flex"><Link href="/login" className="rounded-full px-4 py-2.5 text-sm font-medium text-black/60">Sign in</Link><Link href="/signup" className="landing-button rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white">Start free</Link></div><button type="button" aria-label={menuOpen?"Close menu":"Open menu"} aria-expanded={menuOpen} onClick={()=>setMenuOpen(v=>!v)} className="grid h-10 w-10 place-items-center rounded-full bg-black text-white md:hidden">{menuOpen?<X size={18}/>:<Menu size={18}/>}</button></nav>
+  <div className={`fixed inset-0 z-[-1] md:hidden ${menuOpen?"pointer-events-auto":"pointer-events-none"}`}><button aria-label="Close menu" onClick={closeMenu} className={`absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${menuOpen?"opacity-100":"opacity-0"}`}/><div className={`absolute left-5 right-5 top-[86px] rounded-[28px] border border-black/[.06] bg-white p-5 shadow-2xl transition-all duration-300 ${menuOpen?"translate-y-0 opacity-100":"-translate-y-3 opacity-0"}`}><div className="space-y-1"><a onClick={closeMenu} href="#features" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Features <ArrowRight size={16}/></a><a onClick={closeMenu} href="#how-it-works" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">How it works <ArrowRight size={16}/></a><a onClick={closeMenu} href="#pricing" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium">Pricing <ArrowRight size={16}/></a></div><div className="my-4 h-px bg-black/[.06]"/><div className="grid gap-2"><Link href="/login" onClick={closeMenu} className="rounded-full border border-black/[.08] px-5 py-3.5 text-center text-sm font-medium">Sign in</Link><Link href="/signup" onClick={closeMenu} className="rounded-full bg-black px-5 py-3.5 text-center text-sm font-medium text-white">Start free</Link></div></div></div></div>
 
-const plans = [
-  { name: "Free", price: "₹0", usage: "50 conversations / month", features: ["AI website agent", "Lead capture", "AARYVO branding"] },
-  { name: "Starter", price: "₹999", usage: "500 conversations / month", features: ["Lead qualification", "Conversation inbox", "Appointments & alerts"], popular: true },
-  { name: "Growth", price: "₹2,499", usage: "2,000 conversations / month", features: ["Follow-up workflow", "Google Calendar", "Custom widget branding"] },
-  { name: "Pro", price: "₹4,999", usage: "5,000 conversations / month", features: ["Highest usage limit", "Priority support", "Future premium integrations"] },
-];
+  <section className="relative px-5 pb-24 pt-20 md:px-8 md:pb-32 md:pt-28"><div className="landing-glow pointer-events-none absolute left-1/2 top-20 h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(109,93,252,.10),transparent_68%)]"/><div className="relative mx-auto grid max-w-7xl items-center gap-16 lg:grid-cols-[1.05fr_.95fr]"><div className="landing-hero-copy"><div className="mb-7 inline-flex items-center gap-2 rounded-full border border-black/[.08] bg-white px-4 py-2 text-sm shadow-sm"><Sparkles size={15}/> AI employees for growing businesses</div><h1 className="max-w-4xl text-[3.5rem] font-semibold leading-[.94] tracking-[-.06em] sm:text-7xl lg:text-[5.5rem]">Your website should sell while you sleep.</h1><p className="mt-7 max-w-2xl text-lg leading-8 text-black/55 md:text-xl">AARYVO answers enquiries, qualifies prospects, captures leads and books appointments — automatically, 24/7.</p><div className="mt-9 flex flex-wrap items-center gap-3"><Link href="/signup" className="landing-button inline-flex items-center gap-2 rounded-full bg-black px-6 py-4 text-sm font-medium text-white">Create your AI employee <ArrowRight size={17}/></Link><a href="#how-it-works" className="landing-button inline-flex items-center gap-2 rounded-full border border-black/[.08] bg-white px-6 py-4 text-sm font-medium">See how it works</a></div><div className="mt-8 flex flex-wrap gap-x-7 gap-y-3 text-sm text-black/45"><span className="inline-flex items-center gap-2"><Check size={15}/> Start free</span><span className="inline-flex items-center gap-2"><Check size={15}/> No credit card required</span><span className="inline-flex items-center gap-2"><Check size={15}/> Live in minutes</span></div></div>
+  <div className="landing-hero-panel relative"><div className="landing-float absolute -left-8 -top-8 hidden rounded-2xl border border-black/[.06] bg-white px-4 py-3 shadow-xl lg:block"><div className="text-xs text-black/40">Lead score</div><div className="mt-1 text-2xl font-semibold">92/100</div></div><div className="landing-demo rounded-[38px] border border-black/[.06] bg-white p-4 shadow-[0_30px_80px_rgba(17,19,25,.10)] sm:p-5"><div className="rounded-[30px] bg-[#111319] p-6 text-white sm:p-7"><div className="mb-10 flex items-center justify-between"><div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-white/10"><Bot size={20}/></div><div><p className="text-xs text-white/40">AI Sales Employee</p><p className="mt-1 font-medium">Aaryvo Agent</p></div></div><div className="landing-live rounded-full bg-emerald-400/15 px-3 py-2 text-xs text-emerald-300">● Live</div></div><div className="space-y-3 text-sm leading-6"><div className="landing-message landing-message-1 max-w-[88%] rounded-3xl rounded-bl-md bg-white/10 px-4 py-3">Hi 👋 What are you looking for today?</div><div className="landing-message landing-message-2 ml-auto max-w-[82%] rounded-3xl rounded-br-md bg-white px-4 py-3 text-black">I need interior design for a 3BHK in Noida.</div><div className="landing-message landing-message-3 max-w-[88%] rounded-3xl rounded-bl-md bg-white/10 px-4 py-3">Great. What budget range are you considering?</div><div className="landing-message landing-message-4 ml-auto max-w-[82%] rounded-3xl rounded-br-md bg-white px-4 py-3 text-black">Around ₹20 lakh.</div><div className="landing-message landing-message-5 max-w-[88%] rounded-3xl rounded-bl-md bg-white/10 px-4 py-3">Perfect. I can help you schedule a consultation. Would tomorrow afternoon work?</div></div></div><div className="grid grid-cols-3 gap-3 pt-4">{[[MessageSquareText,"Converse"],[Target,"Qualify"],[CalendarCheck,"Book"]].map(([Icon,label])=>{const I=Icon as typeof Bot;return <div key={label as string} className="landing-card rounded-2xl bg-[#f6f7fb] p-4"><I size={18}/><p className="mt-3 text-xs font-medium sm:text-sm">{label as string}</p></div>})}</div></div></div></div></section>
 
-export default function HomePageClient() {
-  const [menuOpen, setMenuOpen] = useState(false);
+  <section data-reveal className="reveal-section px-5 py-8 md:px-8"><div className="mx-auto max-w-7xl rounded-[32px] bg-black px-7 py-7 text-white md:px-10"><div className="grid gap-6 md:grid-cols-4">{[["24/7","Always available"],["< 1 min","Lead response time"],["1 line","Website installation"],["Private","Business knowledge"]].map(([value,label],index)=><div key={value} className="reveal-child" style={{transitionDelay:`${index*70}ms`}}><div className="text-2xl font-semibold">{value}</div><div className="mt-1 text-sm text-white/45">{label}</div></div>)}</div></div></section>
+  <section id="features" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32"><div className="mx-auto max-w-7xl"><div className="max-w-3xl"><p className="text-xs font-semibold uppercase tracking-[.24em] text-black/35">Built for conversion</p><h2 className="mt-4 text-4xl font-semibold tracking-[-.045em] sm:text-6xl">More than a chatbot. A sales employee.</h2><p className="mt-5 max-w-2xl text-lg leading-8 text-black/50">AARYVO is designed around the work your sales team actually needs done — not just answering FAQs.</p></div><div className="mt-14 grid gap-4 md:grid-cols-2">{features.map(({icon:Icon,title,text},index)=><div key={title} className="landing-card reveal-child rounded-[30px] border border-black/[.06] bg-white p-7 md:p-8" style={{transitionDelay:`${index*80}ms`}}><div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f2f2f5]"><Icon size={20}/></div><h3 className="mt-8 text-2xl font-semibold">{title}</h3><p className="mt-3 max-w-lg leading-7 text-black/50">{text}</p></div>)}</div></div></section>
+  <section id="how-it-works" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32"><div className="mx-auto grid max-w-7xl gap-12 rounded-[40px] bg-[#111319] p-7 text-white md:p-12 lg:grid-cols-[.9fr_1.1fr]"><div><p className="text-xs font-semibold uppercase tracking-[.24em] text-white/35">How it works</p><h2 className="mt-4 text-4xl font-semibold tracking-[-.045em] sm:text-5xl">From website to AI sales employee in three steps.</h2><p className="mt-5 max-w-xl leading-7 text-white/45">No complex setup. No long implementation. AARYVO learns your business and gives you a deployable sales agent.</p></div><div className="space-y-3">{steps.map(([number,title,text],index)=><div key={number} className="reveal-child landing-dark-card grid gap-4 rounded-[26px] bg-white/[.06] p-5 sm:grid-cols-[54px_1fr] sm:p-6" style={{transitionDelay:`${index*90}ms`}}><div className="text-sm font-medium text-white/35">{number}</div><div><h3 className="text-xl font-medium">{title}</h3><p className="mt-2 leading-7 text-white/45">{text}</p></div></div>)}</div></div></section>
+  <section data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32"><div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-3"><div className="landing-card rounded-[30px] border border-black/[.06] bg-white p-8 lg:col-span-2"><div className="flex items-center gap-2 text-sm font-medium text-black/40"><MousePointerClick size={16}/> Built into your website</div><h2 className="mt-6 max-w-2xl text-4xl font-semibold tracking-[-.045em] sm:text-5xl">Your visitor never has to leave the page to become a lead.</h2><p className="mt-5 max-w-2xl leading-7 text-black/50">The AARYVO widget works independently from your website styles and can be installed with one script tag.</p><div className="mt-8 overflow-x-auto rounded-2xl bg-[#111319] px-5 py-4 font-mono text-xs text-white/70 sm:text-sm">&lt;script src=&quot;https://your-domain.com/widget.js&quot; data-agent=&quot;...&quot; defer&gt;&lt;/script&gt;</div></div><div className="landing-card rounded-[30px] bg-[#edeaff] p-8"><Zap size={22}/><div className="mt-16 text-5xl font-semibold tracking-[-.05em]">Minutes</div><p className="mt-3 leading-7 text-black/55">That&apos;s how long it should take to go from signup to a live AI sales employee.</p></div></div></section>
+  <section id="pricing" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32"><div className="mx-auto max-w-7xl"><div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.24em] text-black/35">Simple pricing</p><h2 className="mt-4 text-4xl font-semibold tracking-[-.045em] sm:text-6xl">Start free. Scale when it works.</h2></div><p className="max-w-md leading-7 text-black/45">Choose based on conversation volume. Upgrade whenever your website needs more capacity.</p></div><div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{plans.map((plan,index)=><div key={plan.name} className={`landing-card reveal-child relative rounded-[28px] border p-7 ${plan.popular?"border-black bg-white shadow-xl shadow-black/5":"border-black/[.06] bg-white"}`} style={{transitionDelay:`${index*70}ms`}}>{plan.popular&&<div className="absolute right-5 top-5 rounded-full bg-black px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white">Popular</div>}<h3 className="text-xl font-semibold">{plan.name}</h3><div className="mt-8 flex items-end gap-1"><span className="text-4xl font-semibold tracking-[-.05em]">{plan.price}</span><span className="pb-1 text-xs text-black/35">/month</span></div><p className="mt-3 text-sm text-black/45">{plan.usage}</p><div className="my-7 h-px bg-black/[.07]"/><div className="space-y-3">{plan.features.map(feature=><div key={feature} className="flex gap-2 text-sm text-black/60"><Check size={15} className="mt-0.5 shrink-0"/>{feature}</div>)}</div><Link href="/signup" className={`landing-button mt-8 block rounded-full px-5 py-3.5 text-center text-sm font-medium ${plan.popular?"bg-black text-white":"bg-[#f3f3f5] text-black"}`}>Get started</Link></div>)}</div></div></section>
+  <section data-reveal className="reveal-section px-5 pb-24 pt-8 md:px-8 md:pb-32"><div className="mx-auto max-w-7xl rounded-[40px] bg-black px-7 py-14 text-center text-white md:px-12 md:py-20"><p className="text-xs font-semibold uppercase tracking-[.24em] text-white/35">Ready when you are</p><h2 className="mx-auto mt-5 max-w-4xl text-4xl font-semibold tracking-[-.05em] sm:text-6xl">Give every website visitor your best sales response.</h2><p className="mx-auto mt-5 max-w-xl leading-7 text-white/45">Create your AI sales employee, teach it your business and start capturing better opportunities.</p><Link href="/signup" className="landing-button mt-8 inline-flex items-center gap-2 rounded-full bg-white px-6 py-4 text-sm font-medium text-black">Start free <ArrowRight size={17}/></Link></div></section>
 
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => { document.body.style.overflow = ""; };
-  }, [menuOpen]);
-
-  useEffect(() => {
-    const items = Array.from(document.querySelectorAll<HTMLElement>("[data-reveal]"));
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible");
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.12, rootMargin: "0px 0px -60px 0px" });
-    items.forEach((item) => observer.observe(item));
-    return () => observer.disconnect();
-  }, []);
-
-  const closeMenu = () => setMenuOpen(false);
-
-  return (
-    <main className="min-h-screen overflow-hidden bg-[#f6f7fb] text-[#111319]">
-      <div className="relative z-50 px-5 pt-5 md:px-8 md:pt-7">
-        <nav className="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-black/[.06] bg-white/95 px-5 py-3.5 shadow-[0_8px_30px_rgba(17,19,25,.05)] backdrop-blur md:px-6">
-          <Link href="/" className="flex items-center gap-3" onClick={closeMenu}>
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-black text-sm font-semibold text-white">A</div>
-            <div>
-              <div className="text-sm font-semibold tracking-[0.22em]">AARYVO</div>
-              <div className="hidden text-[10px] text-black/35 sm:block">AI SALES EMPLOYEE</div>
-            </div>
-          </Link>
-
-          <div className="hidden items-center gap-7 text-sm text-black/55 md:flex">
-            <a href="#features" className="transition hover:text-black">Features</a>
-            <a href="#how-it-works" className="transition hover:text-black">How it works</a>
-            <a href="#pricing" className="transition hover:text-black">Pricing</a>
-          </div>
-
-          <div className="hidden items-center gap-2 md:flex">
-            <Link href="/login" className="rounded-full px-4 py-2.5 text-sm font-medium text-black/60">Sign in</Link>
-            <Link href="/signup" className="landing-button rounded-full bg-black px-5 py-2.5 text-sm font-medium text-white">Start free</Link>
-          </div>
-
-          <button
-            type="button"
-            aria-label={menuOpen ? "Close menu" : "Open menu"}
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((value) => !value)}
-            className="grid h-10 w-10 place-items-center rounded-full bg-black text-white md:hidden"
-          >
-            {menuOpen ? <X size={18} /> : <Menu size={18} />}
-          </button>
-        </nav>
-
-        <div className={`fixed inset-0 z-[-1] md:hidden ${menuOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
-          <button aria-label="Close menu" onClick={closeMenu} className={`absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-300 ${menuOpen ? "opacity-100" : "opacity-0"}`} />
-          <div className={`absolute left-5 right-5 top-[86px] rounded-[28px] border border-black/[.06] bg-white p-5 shadow-2xl transition-all duration-300 ${menuOpen ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0"}`}>
-            <div className="space-y-1">
-              <a onClick={closeMenu} href="#features" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium hover:bg-black/[.035]">Features <ArrowRight size={16} className="text-black/30" /></a>
-              <a onClick={closeMenu} href="#how-it-works" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium hover:bg-black/[.035]">How it works <ArrowRight size={16} className="text-black/30" /></a>
-              <a onClick={closeMenu} href="#pricing" className="flex items-center justify-between rounded-2xl px-4 py-4 text-lg font-medium hover:bg-black/[.035]">Pricing <ArrowRight size={16} className="text-black/30" /></a>
-            </div>
-            <div className="my-4 h-px bg-black/[.06]" />
-            <div className="grid gap-2">
-              <Link href="/login" onClick={closeMenu} className="rounded-full border border-black/[.08] px-5 py-3.5 text-center text-sm font-medium">Sign in</Link>
-              <Link href="/signup" onClick={closeMenu} className="rounded-full bg-black px-5 py-3.5 text-center text-sm font-medium text-white">Start free</Link>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <section className="relative px-5 pb-24 pt-20 md:px-8 md:pb-32 md:pt-28">
-        <div className="landing-glow pointer-events-none absolute left-1/2 top-20 h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(109,93,252,.10),transparent_68%)]" />
-        <div className="relative mx-auto grid max-w-7xl items-center gap-16 lg:grid-cols-[1.05fr_.95fr]">
-          <div className="landing-hero-copy">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-black/[.08] bg-white px-4 py-2 text-sm shadow-sm">
-              <Sparkles size={15} /> AI employees for growing businesses
-            </div>
-            <h1 className="max-w-4xl text-[3.5rem] font-semibold leading-[.94] tracking-[-.06em] sm:text-7xl lg:text-[5.5rem]">Your website should sell while you sleep.</h1>
-            <p className="mt-7 max-w-2xl text-lg leading-8 text-black/55 md:text-xl">AARYVO answers enquiries, qualifies prospects, captures leads and books appointments — automatically, 24/7.</p>
-            <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link href="/signup" className="landing-button inline-flex items-center gap-2 rounded-full bg-black px-6 py-4 text-sm font-medium text-white">Create your AI employee <ArrowRight size={17} /></Link>
-              <a href="#how-it-works" className="landing-button inline-flex items-center gap-2 rounded-full border border-black/[.08] bg-white px-6 py-4 text-sm font-medium">See how it works</a>
-            </div>
-            <div className="mt-8 flex flex-wrap gap-x-7 gap-y-3 text-sm text-black/45">
-              <span className="inline-flex items-center gap-2"><Check size={15} /> Start free</span>
-              <span className="inline-flex items-center gap-2"><Check size={15} /> No credit card required</span>
-              <span className="inline-flex items-center gap-2"><Check size={15} /> Live in minutes</span>
-            </div>
-          </div>
-
-          <div className="landing-hero-panel relative">
-            <div className="landing-float absolute -left-8 -top-8 hidden rounded-2xl border border-black/[.06] bg-white px-4 py-3 shadow-xl lg:block">
-              <div className="text-xs text-black/40">Lead score</div><div className="mt-1 text-2xl font-semibold">92/100</div>
-            </div>
-            <div className="landing-demo rounded-[38px] border border-black/[.06] bg-white p-4 shadow-[0_30px_80px_rgba(17,19,25,.10)] sm:p-5">
-              <div className="rounded-[30px] bg-[#111319] p-6 text-white sm:p-7">
-                <div className="mb-10 flex items-center justify-between">
-                  <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl bg-white/10"><Bot size={20} /></div><div><p className="text-xs text-white/40">AI Sales Employee</p><p className="mt-1 font-medium">Aaryvo Agent</p></div></div>
-                  <div className="landing-live rounded-full bg-emerald-400/15 px-3 py-2 text-xs text-emerald-300">● Live</div>
-                </div>
-                <div className="space-y-3 text-sm leading-6">
-                  <div className="landing-message landing-message-1 max-w-[88%] rounded-3xl rounded-bl-md bg-white/10 px-4 py-3">Hi 👋 What are you looking for today?</div>
-                  <div className="landing-message landing-message-2 ml-auto max-w-[82%] rounded-3xl rounded-br-md bg-white px-4 py-3 text-black">I need interior design for a 3BHK in Noida.</div>
-                  <div className="landing-message landing-message-3 max-w-[88%] rounded-3xl rounded-bl-md bg-white/10 px-4 py-3">Great. What budget range are you considering?</div>
-                  <div className="landing-message landing-message-4 ml-auto max-w-[82%] rounded-3xl rounded-br-md bg-white px-4 py-3 text-black">Around ₹20 lakh.</div>
-                  <div className="landing-message landing-message-5 max-w-[88%] rounded-3xl rounded-bl-md bg-white/10 px-4 py-3">Perfect. I can help you schedule a consultation. Would tomorrow afternoon work?</div>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-3 pt-4">
-                {[[MessageSquareText,"Converse"],[Target,"Qualify"],[CalendarCheck,"Book"]].map(([Icon,label]) => { const I=Icon as typeof Bot; return <div key={label as string} className="landing-card rounded-2xl bg-[#f6f7fb] p-4"><I size={18}/><p className="mt-3 text-xs font-medium sm:text-sm">{label as string}</p></div>; })}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section data-reveal className="reveal-section px-5 py-8 md:px-8">
-        <div className="mx-auto max-w-7xl rounded-[32px] bg-black px-7 py-7 text-white md:px-10"><div className="grid gap-6 md:grid-cols-4">{[["24/7","Always available"],["< 1 min","Lead response time"],["1 line","Website installation"],["Private","Business knowledge"]].map(([value,label],index)=><div key={value} className="reveal-child" style={{transitionDelay:`${index*70}ms`}}><div className="text-2xl font-semibold">{value}</div><div className="mt-1 text-sm text-white/45">{label}</div></div>)}</div></div>
-      </section>
-
-      <section id="features" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32">
-        <div className="mx-auto max-w-7xl">
-          <div className="max-w-3xl"><p className="text-xs font-semibold uppercase tracking-[.24em] text-black/35">Built for conversion</p><h2 className="mt-4 text-4xl font-semibold tracking-[-.045em] sm:text-6xl">More than a chatbot. A sales employee.</h2><p className="mt-5 max-w-2xl text-lg leading-8 text-black/50">AARYVO is designed around the work your sales team actually needs done — not just answering FAQs.</p></div>
-          <div className="mt-14 grid gap-4 md:grid-cols-2">{features.map(({icon:Icon,title,text},index)=><div key={title} className="landing-card reveal-child rounded-[30px] border border-black/[.06] bg-white p-7 shadow-[0_10px_35px_rgba(17,19,25,.035)] md:p-8" style={{transitionDelay:`${index*80}ms`}}><div className="grid h-11 w-11 place-items-center rounded-2xl bg-[#f2f2f5]"><Icon size={20}/></div><h3 className="mt-8 text-2xl font-semibold tracking-[-.03em]">{title}</h3><p className="mt-3 max-w-lg leading-7 text-black/50">{text}</p></div>)}</div>
-        </div>
-      </section>
-
-      <section id="how-it-works" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32">
-        <div className="mx-auto grid max-w-7xl gap-12 rounded-[40px] bg-[#111319] p-7 text-white md:p-12 lg:grid-cols-[.9fr_1.1fr]">
-          <div><p className="text-xs font-semibold uppercase tracking-[.24em] text-white/35">How it works</p><h2 className="mt-4 text-4xl font-semibold tracking-[-.045em] sm:text-5xl">From website to AI sales employee in three steps.</h2><p className="mt-5 max-w-xl leading-7 text-white/45">No complex setup. No long implementation. AARYVO learns your business and gives you a deployable sales agent.</p></div>
-          <div className="space-y-3">{steps.map(([number,title,text],index)=><div key={number} className="reveal-child landing-dark-card grid gap-4 rounded-[26px] bg-white/[.06] p-5 sm:grid-cols-[54px_1fr] sm:p-6" style={{transitionDelay:`${index*90}ms`}}><div className="text-sm font-medium text-white/35">{number}</div><div><h3 className="text-xl font-medium">{title}</h3><p className="mt-2 leading-7 text-white/45">{text}</p></div></div>)}</div>
-        </div>
-      </section>
-
-      <section data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32">
-        <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-3">
-          <div className="landing-card rounded-[30px] border border-black/[.06] bg-white p-8 lg:col-span-2"><div className="flex items-center gap-2 text-sm font-medium text-black/40"><MousePointerClick size={16}/> Built into your website</div><h2 className="mt-6 max-w-2xl text-4xl font-semibold tracking-[-.045em] sm:text-5xl">Your visitor never has to leave the page to become a lead.</h2><p className="mt-5 max-w-2xl leading-7 text-black/50">The AARYVO widget works independently from your website styles and can be installed with one script tag.</p><div className="mt-8 overflow-x-auto rounded-2xl bg-[#111319] px-5 py-4 font-mono text-xs text-white/70 sm:text-sm">&lt;script src=&quot;https://your-domain.com/widget.js&quot; data-agent=&quot;...&quot; defer&gt;&lt;/script&gt;</div></div>
-          <div className="landing-card rounded-[30px] bg-[#edeaff] p-8"><Zap size={22}/><div className="mt-16 text-5xl font-semibold tracking-[-.05em]">Minutes</div><p className="mt-3 leading-7 text-black/55">That&apos;s how long it should take to go from signup to a live AI sales employee.</p></div>
-        </div>
-      </section>
-
-      <section id="pricing" data-reveal className="reveal-section px-5 py-24 md:px-8 md:py-32">
-        <div className="mx-auto max-w-7xl">
-          <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.24em] text-black/35">Simple pricing</p><h2 className="mt-4 text-4xl font-semibold tracking-[-.045em] sm:text-6xl">Start free. Scale when it works.</h2></div><p className="max-w-md leading-7 text-black/45">Choose based on conversation volume. Upgrade whenever your website needs more capacity.</p></div>
-          <div className="mt-14 grid gap-4 md:grid-cols-2 xl:grid-cols-4">{plans.map((plan,index)=><div key={plan.name} className={`landing-card reveal-child relative rounded-[28px] border p-7 ${plan.popular?"border-black bg-white shadow-xl shadow-black/5":"border-black/[.06] bg-white"}`} style={{transitionDelay:`${index*70}ms`}}>{plan.popular&&<div className="absolute right-5 top-5 rounded-full bg-black px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-white">Popular</div>}<h3 className="text-xl font-semibold">{plan.name}</h3><div className="mt-8 flex items-end gap-1"><span className="text-4xl font-semibold tracking-[-.05em]">{plan.price}</span><span className="pb-1 text-xs text-black/35">/month</span></div><p className="mt-3 text-sm text-black/45">{plan.usage}</p><div className="my-7 h-px bg-black/[.07]"/><div className="space-y-3">{plan.features.map(feature=><div key={feature} className="flex gap-2 text-sm text-black/60"><Check size={15} className="mt-0.5 shrink-0"/>{feature}</div>)}</div><Link href="/signup" className={`landing-button mt-8 block rounded-full px-5 py-3.5 text-center text-sm font-medium ${plan.popular?"bg-black text-white":"bg-[#f3f3f5] text-black"}`}>Get started</Link></div>)}</div>
-        </div>
-      </section>
-
-      <section data-reveal className="reveal-section px-5 pb-24 pt-8 md:px-8 md:pb-32">
-        <div className="mx-auto max-w-7xl rounded-[40px] bg-black px-7 py-14 text-center text-white md:px-12 md:py-20"><p className="text-xs font-semibold uppercase tracking-[.24em] text-white/35">Ready when you are</p><h2 className="mx-auto mt-5 max-w-4xl text-4xl font-semibold tracking-[-.05em] sm:text-6xl">Give every website visitor your best sales response.</h2><p className="mx-auto mt-5 max-w-xl leading-7 text-white/45">Create your AI sales employee, teach it your business and start capturing better opportunities.</p><Link href="/signup" className="landing-button mt-8 inline-flex items-center gap-2 rounded-full bg-white px-6 py-4 text-sm font-medium text-black">Start free <ArrowRight size={17}/></Link></div>
-      </section>
-
-      <footer className="border-t border-black/[.06] bg-white/40 px-5 py-10 md:px-8"><div className="mx-auto flex max-w-7xl flex-col gap-8 md:flex-row md:items-center md:justify-between"><div><div className="font-semibold tracking-[.22em]">AARYVO</div><p className="mt-2 text-sm text-black/40">AI sales employees for growing businesses.</p></div><div className="flex flex-wrap gap-x-6 gap-y-3 text-sm text-black/45"><a href="#features">Features</a><a href="#pricing">Pricing</a><Link href="/login">Sign in</Link><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><p className="text-xs text-black/35">© 2026 AARYVO. All rights reserved.</p></div></footer>
-    </main>
-  );
+  <footer className="border-t border-black/[.06] bg-white/60 px-5 py-10 md:px-8"><div className="mx-auto max-w-7xl"><div className="grid gap-8 md:grid-cols-[1.1fr_1.5fr] md:items-start"><div><div className="font-semibold tracking-[.22em]">AARYVO</div><p className="mt-2 text-sm text-black/40">AI sales employees for growing businesses.</p><p className="mt-4 text-xs leading-5 text-black/40"><strong className="font-semibold text-black/55">AARYVO is a product of PP DESIGN AND TECH.</strong><br/>Payments and GST invoices are processed by PP DESIGN AND TECH.<br/>GSTIN: 07CQXPP5370D1ZB</p></div><div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm text-black/45 sm:grid-cols-3"><a href="#features">Features</a><a href="#pricing">Pricing</a><Link href="/contact">Contact Us</Link><Link href="/privacy">Privacy Policy</Link><Link href="/terms">Terms of Service</Link><Link href="/refund-policy">Refund Policy</Link><Link href="/cancellation-policy">Cancellation Policy</Link><Link href="/shipping-policy">Shipping & Delivery</Link></div></div><div className="mt-8 flex flex-col gap-2 border-t border-black/[.06] pt-6 text-xs text-black/35 sm:flex-row sm:items-center sm:justify-between"><p>© 2026 AARYVO. All rights reserved.</p><p>Operated by PP DESIGN AND TECH</p></div></div></footer>
+ </main>
 }
