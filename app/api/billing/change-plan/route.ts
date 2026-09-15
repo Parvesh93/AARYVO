@@ -23,27 +23,16 @@ export async function POST(request: Request) {
   if (!planId) return NextResponse.json({ error: `Razorpay ${plan} plan is not configured.` }, { status: 503 });
 
   const currentPrice = isPlanKey(business.plan) ? PLANS[business.plan].price : 0;
-  const isUpgrade = PLANS[plan].price > currentPrice;
+  const targetPrice = PLANS[plan].price;
+  const direction = targetPrice > currentPrice ? "upgrade" : "downgrade";
 
   try {
-    const subscription = await razorpayRequest(`/subscriptions/${business.razorpaySubscriptionId}`, {
+    await razorpayRequest(`/subscriptions/${business.razorpaySubscriptionId}`, {
       method: "PATCH",
-      body: JSON.stringify({ plan_id: planId, quantity: 1, schedule_change_at: isUpgrade ? "now" : "cycle_end" }),
+      body: JSON.stringify({ plan_id: planId, quantity: 1, schedule_change_at: "cycle_end" }),
     });
 
-    if (isUpgrade) {
-      await prisma.business.update({
-        where: { id: business.id },
-        data: {
-          plan,
-          razorpayPlanId: planId,
-          monthlyConversationLimit: PLANS[plan].conversations,
-          subscriptionStatus: String(subscription.status || business.subscriptionStatus),
-        },
-      });
-    }
-
-    return NextResponse.json({ ok: true, effective: isUpgrade ? "now" : "cycle_end", plan });
+    return NextResponse.json({ ok: true, effective: "cycle_end", plan, direction });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to change plan." }, { status: 500 });
   }
