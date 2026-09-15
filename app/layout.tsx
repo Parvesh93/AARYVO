@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "https://aaryvo.ppdesigntech.com").replace(/\/$/, "");
@@ -34,5 +35,16 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return (
+    <html lang="en">
+      <body>
+        {children}
+        <Script
+          src="https://aaryvo.ppdesigntech.com/widget.js"
+          data-agent="cmu3ayuj30004iu4qmzi9hj9t"
+          strategy="afterInteractive"
+        />
+      </body>
+    </html>
+  );
 }
