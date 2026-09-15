@@ -27,6 +27,9 @@ export async function PATCH(request: Request) {
     widgetWhatsappMessage: clean(body.whatsappMessage, "Hi, I was speaking with your AI assistant on your website and would like to continue the conversation on WhatsApp.", 700),
     widgetPosition: body.position === "LEFT" ? "LEFT" : "RIGHT",
     widgetLauncherStyle: ["SPARKLE", "CHAT", "TEXT"].includes(body.launcherStyle) ? body.launcherStyle : "SPARKLE",
+    widgetLauncherLabel: clean(body.launcherLabel, "Chat with us", 60),
+    widgetLauncherAnimation: ["PULSE", "BOUNCE", "GLOW", "NONE"].includes(body.launcherAnimation) ? body.launcherAnimation : "PULSE",
+    widgetLauncherLabelEnabled: body.launcherLabelEnabled !== false,
     widgetShowPoweredBy: body.showPoweredBy !== false,
   };
   await prisma.agent.update({ where: { id: agent.id }, data });
