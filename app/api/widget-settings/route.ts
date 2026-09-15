@@ -12,6 +12,7 @@ export async function PATCH(request: Request) {
   if (!agent) return NextResponse.json({ error: "AI employee not found" }, { status: 404 });
   const body = await request.json();
   const clean = (value: unknown, fallback: string, max: number) => typeof value === "string" && value.trim() ? value.trim().slice(0, max) : fallback;
+  const whatsappNumber = typeof body.whatsappNumber === "string" ? body.whatsappNumber.replace(/\D/g, "").slice(0, 20) : "";
   const data = {
     widgetAccentColor: hex.test(body.accentColor) ? body.accentColor : agent.widgetAccentColor,
     widgetTheme: body.theme === "DARK" ? "DARK" : "LIGHT",
@@ -20,6 +21,10 @@ export async function PATCH(request: Request) {
     widgetWelcomeMessage: clean(body.welcomeMessage, agent.widgetWelcomeMessage, 1000),
     widgetStartLabel: clean(body.startLabel, "Start conversation →", 80),
     widgetBookLabel: clean(body.bookLabel, "Book a consultation", 80),
+    widgetWhatsappEnabled: body.whatsappEnabled === true && Boolean(whatsappNumber),
+    widgetWhatsappNumber: whatsappNumber || null,
+    widgetWhatsappLabel: clean(body.whatsappLabel, "Continue on WhatsApp", 80),
+    widgetWhatsappMessage: clean(body.whatsappMessage, "Hi, I was speaking with your AI assistant on your website and would like to continue the conversation on WhatsApp.", 700),
     widgetPosition: body.position === "LEFT" ? "LEFT" : "RIGHT",
     widgetLauncherStyle: ["SPARKLE", "CHAT", "TEXT"].includes(body.launcherStyle) ? body.launcherStyle : "SPARKLE",
     widgetShowPoweredBy: body.showPoweredBy !== false,
