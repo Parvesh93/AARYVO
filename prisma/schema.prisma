@@ -43,6 +43,14 @@ model Business {
   notifyHotLead Boolean @default(true)
   notifyAppointment Boolean @default(true)
   notifyHumanAttention Boolean @default(true)
+  customSmtpEnabled Boolean @default(false)
+  smtpHost String?
+  smtpPort Int?
+  smtpSecure Boolean @default(false)
+  smtpUser String?
+  smtpPasswordEncrypted String? @db.Text
+  smtpFromName String?
+  smtpFromEmail String?
   plan String @default("FREE")
   subscriptionStatus String @default("FREE")
   razorpaySubscriptionId String? @unique
