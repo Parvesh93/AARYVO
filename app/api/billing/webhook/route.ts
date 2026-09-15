@@ -18,10 +18,39 @@ export async function POST(request: Request) {
     if (replacement) {
       const plan = planFromRazorpayPlanId(String(sub.plan_id || ""));
       const status = String(sub.status || event.replace("subscription.", ""));
-      const active = ["subscription.activated", "subscription.charged", "subscription.resumed"].includes(event) && ["active", "authenticated", "pending"].includes(status.toLowerCase());
-      const terminal = ["subscription.cancelled", "subscription.completed", "subscription.expired"].includes(event) || ["cancelled", "completed", "expired"].includes(status.toLowerCase());
+      const statusLower = status.toLowerCase();
+      const activated = ["subscription.activated", "subscription.charged", "subscription.resumed"].includes(event) && ["active", "authenticated", "pending"].includes(statusLower);
+      const authenticated = event === "subscription.authenticated" || statusLower === "authenticated";
+      const terminal = ["subscription.cancelled", "subscription.completed", "subscription.expired"].includes(event) || ["cancelled", "completed", "expired"].includes(statusLower);
 
-      if (active && plan) {
+      if (replacement.direction === "DOWNGRADE") {
+        if (authenticated && !activated) {
+          await updateBillingTransition(String(sub.id), "AUTHENTICATED");
+          return NextResponse.json({ ok: true });
+        }
+
+        if (activated && plan) {
+          await prisma.business.update({
+            where: { id: replacement.businessId },
+            data: {
+              razorpaySubscriptionId: String(sub.id),
+              razorpayPlanId: String(sub.plan_id || ""),
+              plan,
+              monthlyConversationLimit: PLANS[plan].conversations,
+              subscriptionStatus: status,
+              subscriptionCancelAtEnd: false,
+              ...(sub.current_start ? { subscriptionCurrentStart: new Date(sub.current_start * 1000), usagePeriodStart: new Date(sub.current_start * 1000) } : {}),
+              ...(sub.current_end ? { subscriptionCurrentEnd: new Date(sub.current_end * 1000), usagePeriodEnd: new Date(sub.current_end * 1000) } : {}),
+            },
+          });
+          await updateBillingTransition(String(sub.id), "ACTIVE");
+        } else if (terminal) {
+          await updateBillingTransition(String(sub.id), "TERMINAL");
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      if (activated && plan) {
         await prisma.business.update({
           where: { id: replacement.businessId },
           data: {
@@ -36,6 +65,8 @@ export async function POST(request: Request) {
           },
         });
         await updateBillingTransition(String(sub.id), "ACTIVE");
+      } else if (authenticated) {
+        await updateBillingTransition(String(sub.id), "AUTHENTICATED");
       } else if (terminal) {
         await updateBillingTransition(String(sub.id), "TERMINAL");
       }
