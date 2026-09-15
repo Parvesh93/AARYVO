@@ -28,6 +28,9 @@ export async function POST(request: Request) {
       theme: agent.widgetTheme,
       position: agent.widgetPosition,
       launcherStyle: agent.widgetLauncherStyle,
+      launcherLabel: agent.widgetLauncherLabel,
+      launcherAnimation: agent.widgetLauncherAnimation,
+      launcherLabelEnabled: agent.widgetLauncherLabelEnabled,
       showPoweredBy: agent.widgetShowPoweredBy,
       bookingScoreThreshold: agent.bookingScoreThreshold,
     }, { headers });
