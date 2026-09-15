@@ -2,8 +2,8 @@
 
 :root { --bg:#f4f1e8; --ink:#151515; --muted:#6b7280; --card:#fff; --accent:#ffdf67; }
 * { box-sizing:border-box; }
-html { background:var(--bg); scroll-behavior:smooth; }
-body { margin:0; background:var(--bg); color:var(--ink); font-family:Arial,Helvetica,sans-serif; }
+html { background:var(--bg); scroll-behavior:smooth; overflow-x:hidden; }
+body { margin:0; min-width:0; overflow-x:hidden; background:var(--bg); color:var(--ink); font-family:Arial,Helvetica,sans-serif; }
 @layer base { a { text-decoration:none; } }
 
 .dashboard-sidebar-scroll { scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.14) transparent; }
@@ -41,5 +41,72 @@ body { margin:0; background:var(--bg); color:var(--ink); font-family:Arial,Helve
 @keyframes hero-orbit { 0%,100%{transform:translateY(0) rotate(-5deg)} 50%{transform:translateY(-10px) rotate(5deg)} }
 @keyframes premium-marquee { from{transform:translateX(0)} to{transform:translateX(-50%)} }
 
-@media(max-width:767px){ .premium-demo:hover,.premium-feature-card:hover,.premium-price-card:hover,.premium-button:hover{transform:none} .premium-marquee{animation-duration:22s} }
+@media(max-width:767px){
+  .premium-demo:hover,.premium-feature-card:hover,.premium-price-card:hover,.premium-button:hover{transform:none}
+  .premium-marquee{animation-duration:22s}
+
+  .landing-hero-copy,
+  .landing-hero-panel{
+    width:100%;
+    min-width:0;
+    max-width:100%;
+  }
+
+  .landing-hero-copy h1{
+    max-width:100%;
+    font-size:clamp(2.45rem,12.8vw,3.35rem) !important;
+    line-height:.91 !important;
+    letter-spacing:-.055em !important;
+    overflow-wrap:normal;
+    word-break:normal;
+  }
+
+  .landing-hero-copy > p{
+    max-width:100%;
+    font-size:.94rem;
+    line-height:1.65rem;
+  }
+
+  .landing-hero-copy .premium-button{
+    padding:.78rem 1rem;
+    font-size:.72rem;
+  }
+
+  .landing-hero-panel{
+    margin-top:.25rem;
+  }
+
+  .premium-demo{
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    border-radius:24px;
+    padding:.75rem;
+  }
+
+  .premium-demo *{
+    min-width:0;
+  }
+
+  .premium-demo .landing-message{
+    max-width:92%;
+    font-size:.72rem;
+    line-height:1.15rem;
+    padding:.65rem .75rem;
+  }
+}
+
+@media(max-width:380px){
+  .landing-hero-copy h1{
+    font-size:clamp(2.25rem,12.4vw,2.85rem) !important;
+  }
+  .landing-hero-copy .premium-button{
+    padding:.72rem .9rem;
+    font-size:.68rem;
+  }
+  .premium-demo{
+    border-radius:20px;
+  }
+}
+
 @media(prefers-reduced-motion:reduce){ html{scroll-behavior:auto}.landing-hero-copy,.landing-hero-panel,.landing-message,.hero-orbit,.premium-marquee{animation:none!important;opacity:1;transform:none}.reveal-section,.reveal-child{opacity:1;transform:none;transition:none}.premium-button,.premium-demo,.premium-feature-card,.premium-price-card{transition:none} }
