@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isPlanKey, PLANS, razorpayConfigured, razorpayPlanId, razorpayRequest } from "@/lib/billing";
-import { sanitizeBillingProfile, saveBillingProfile, taxBreakdownInclusive, validateBillingProfile } from "@/lib/billing-profile";
+import { sanitizeBillingProfile, saveBillingProfile, taxBreakdownExclusive, validateBillingProfile } from "@/lib/billing-profile";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
 
   try {
     await saveBillingProfile(member.businessId, profile);
-    const tax = taxBreakdownInclusive(PLANS[plan].price * 100, profile.state, profile.country);
+    const tax = taxBreakdownExclusive(PLANS[plan].price * 100, profile.state, profile.country);
     const subscription = await razorpayRequest("/subscriptions", {
       method: "POST",
       body: JSON.stringify({
@@ -48,6 +48,9 @@ export async function POST(request: Request) {
           billingState: profile.state,
           billingCountry: profile.country,
           gstin: profile.gstin || "",
+          baseAmountPaise: String(tax.subtotalPaise),
+          gstAmountPaise: String(tax.taxPaise),
+          totalAmountPaise: String(tax.totalPaise),
         },
       }),
     });
@@ -64,7 +67,7 @@ export async function POST(request: Request) {
       email: profile.email || member.user.email,
       phone: profile.phone,
       plan,
-      pricingMode: "tax_inclusive",
+      pricingMode: "tax_exclusive",
       tax,
     });
   } catch (error) {
