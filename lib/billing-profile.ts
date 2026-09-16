@@ -138,13 +138,21 @@ export function gstRate() {
   return Number.isFinite(value) && value >= 0 ? value : 18;
 }
 
+function normalizeState(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z]/g, "");
+}
+
 export function supplierState() {
-  return String(process.env.BILLING_SUPPLIER_STATE || "").trim();
+  // PP DESIGN AND TECH GSTIN begins with state code 07, which is Delhi.
+  // Keep the env override so this remains configurable if the GST registration changes.
+  return String(process.env.BILLING_SUPPLIER_STATE || "Delhi").trim();
 }
 
 function splitTax(taxPaise: number, rate: number, customerState: string) {
   const sellerState = supplierState();
-  const sameState = Boolean(sellerState) && sellerState.toLowerCase() === customerState.trim().toLowerCase();
+  const seller = normalizeState(sellerState);
+  const customer = normalizeState(customerState);
+  const sameState = Boolean(seller && customer) && (seller === customer || (seller === "delhi" && ["delhi","newdelhi","nctdelhi","nationalcapitalterritorydelhi"].includes(customer)));
   const cgstPaise = rate && sameState ? Math.floor(taxPaise / 2) : 0;
   const sgstPaise = rate && sameState ? taxPaise - cgstPaise : 0;
   const igstPaise = rate && !sameState ? taxPaise : 0;
