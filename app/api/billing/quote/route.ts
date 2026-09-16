@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { isPlanKey, PLANS } from "@/lib/billing";
-import { sanitizeBillingProfile, taxBreakdownInclusive, validateBillingProfile } from "@/lib/billing-profile";
+import { sanitizeBillingProfile, taxBreakdownExclusive, validateBillingProfile } from "@/lib/billing-profile";
 
 export async function POST(request: Request) {
   const session = await getSession();
@@ -15,13 +15,13 @@ export async function POST(request: Request) {
   const error = validateBillingProfile(profile);
   if (error) return NextResponse.json({ error }, { status: 400 });
 
-  const totalPaise = PLANS[plan].price * 100;
-  const tax = taxBreakdownInclusive(totalPaise, profile.state, profile.country);
+  const subtotalPaise = PLANS[plan].price * 100;
+  const tax = taxBreakdownExclusive(subtotalPaise, profile.state, profile.country);
   return NextResponse.json({
     plan,
     planName: PLANS[plan].name,
     currency: "INR",
-    pricingMode: "tax_inclusive",
+    pricingMode: "tax_exclusive",
     ...tax,
   });
 }
