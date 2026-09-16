@@ -3,9 +3,10 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { isPlanKey, PLANS, razorpayPlanId, razorpayRequest } from "@/lib/billing";
+import { gstRate } from "@/lib/billing-profile";
 import { activeTransitionForBusiness, createBillingTransition, updateBillingTransition } from "@/lib/billing-upgrade";
 
-function proratedUpgradePaise(currentPrice:number,targetPrice:number,periodStart:Date|null,periodEnd:Date|null){if(targetPrice<=currentPrice)return 0;const now=Date.now(),start=periodStart?.getTime()||now,end=periodEnd?.getTime()||now,total=Math.max(1,end-start),remaining=Math.max(0,Math.min(total,end-now));return Math.max(0,Math.round((targetPrice-currentPrice)*100*(remaining/total)))}
+function proratedUpgradePaise(currentPrice:number,targetPrice:number,periodStart:Date|null,periodEnd:Date|null){if(targetPrice<=currentPrice)return 0;const now=Date.now(),start=periodStart?.getTime()||now,end=periodEnd?.getTime()||now,total=Math.max(1,end-start),remaining=Math.max(0,Math.min(total,end-now));const basePaise=Math.max(0,Math.round((targetPrice-currentPrice)*100*(remaining/total)));return Math.round(basePaise*(1+gstRate()/100))}
 
 export async function POST(request:Request){
  const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
@@ -31,7 +32,7 @@ export async function POST(request:Request){
  const keyId=process.env.RAZORPAY_KEY_ID||"";if(!keyId)return NextResponse.json({error:"Razorpay checkout key is not configured."},{status:503});
  const currentPrice=isPlanKey(business.plan)?PLANS[business.plan].price:0,targetPrice=PLANS[plan].price,isUpgrade=targetPrice>currentPrice,startAt=business.subscriptionCurrentEnd&&business.subscriptionCurrentEnd.getTime()>Date.now()?business.subscriptionCurrentEnd:new Date(Date.now()+5*60*1000),upfrontPaise=isUpgrade?proratedUpgradePaise(currentPrice,targetPrice,business.subscriptionCurrentStart,business.subscriptionCurrentEnd):0;
  try{
-  const subscription=await razorpayRequest("/subscriptions",{method:"POST",body:JSON.stringify({plan_id:planId,total_count:120,quantity:1,start_at:Math.floor(startAt.getTime()/1000),customer_notify:1,notes:{aaryvo_business_id:business.id,aaryvo_from_plan:business.plan,aaryvo_to_plan:plan,aaryvo_change:isUpgrade?"upgrade":"downgrade"},...(upfrontPaise>0?{addons:[{item:{name:`${PLANS[plan].name} immediate upgrade access`,amount:upfrontPaise,currency:"INR",description:`Prorated upgrade from ${business.plan} to ${plan} until the next billing date.`}}]}:{})})});
+  const subscription=await razorpayRequest("/subscriptions",{method:"POST",body:JSON.stringify({plan_id:planId,total_count:120,quantity:1,start_at:Math.floor(startAt.getTime()/1000),customer_notify:1,notes:{aaryvo_business_id:business.id,aaryvo_from_plan:business.plan,aaryvo_to_plan:plan,aaryvo_change:isUpgrade?"upgrade":"downgrade",aaryvo_pricing:"base_plus_gst"},...(upfrontPaise>0?{addons:[{item:{name:`${PLANS[plan].name} immediate upgrade access`,amount:upfrontPaise,currency:"INR",description:`Prorated upgrade from ${business.plan} to ${plan}, including ${gstRate()}% GST, until the next billing date.`}}]}:{})})});
   if(!subscription?.id)throw new Error("Razorpay did not create the replacement subscription.");
   await createBillingTransition({id:crypto.randomUUID(),businessId:business.id,oldSubscriptionId:business.razorpaySubscriptionId,newSubscriptionId:String(subscription.id),fromPlan:business.plan,toPlan:plan,direction:isUpgrade?"UPGRADE":"DOWNGRADE",upfrontPaise,startAt,status:"CREATED",paymentId:null});
   return NextResponse.json({keyId,subscriptionId:subscription.id,plan,planName:PLANS[plan].name,direction:isUpgrade?"upgrade":"downgrade",effective:isUpgrade?"after_authorization":"cycle_end",startAt:startAt.toISOString(),upfrontPaise,name:member.user.name||business.name,email:member.user.email});
