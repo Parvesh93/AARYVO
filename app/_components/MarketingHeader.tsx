@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight, Menu, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import BrandLogo from "./BrandLogo";
 
 export default function MarketingHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -17,12 +18,8 @@ export default function MarketingHeader() {
   return (
     <header className="sticky top-0 z-[80] px-4 pt-4 md:px-7 md:pt-5">
       <nav className="premium-nav mx-auto flex max-w-[1380px] items-center justify-between rounded-[22px] border border-black/10 bg-[#f9f7f1]/95 px-4 py-3 shadow-[0_12px_40px_rgba(20,20,20,.06)] backdrop-blur-xl md:px-5">
-        <Link href="/" onClick={close} className="flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-full bg-[#161616] text-sm font-semibold text-white">A</div>
-          <div>
-            <div className="text-[15px] font-semibold tracking-[.24em]">AARYVO</div>
-            <div className="text-[9px] uppercase tracking-[.16em] text-black/35">AI Sales OS</div>
-          </div>
+        <Link href="/" onClick={close} className="flex items-center">
+          <BrandLogo variant="full" theme="dark" className="h-[32px] w-auto object-contain md:h-[35px]" />
         </Link>
 
         <div className="hidden items-center gap-8 text-[13px] font-medium text-black/55 md:flex">
