@@ -3,24 +3,27 @@ import { Flame, Trophy, Users } from "lucide-react";
 import LeadsTable from "./LeadsTable";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { hasFeature } from "@/lib/plan-entitlements";
 
 export default async function LeadsPage(){
   const session=await requireSession();
-  const member=await prisma.businessMember.findFirst({where:{userId:session.userId},select:{businessId:true}});
+  const member=await prisma.businessMember.findFirst({where:{userId:session.userId},include:{business:true}});
   if(!member)redirect("/onboarding");
+  const scoring=hasFeature(member.business.plan,"leadScoring");
   const leads=await prisma.lead.findMany({where:{businessId:member.businessId},orderBy:{createdAt:"desc"},take:250});
-  const hot=leads.filter((lead)=>lead.status==="HOT"||lead.status==="QUALIFIED").length;
+  const hot=scoring?leads.filter((lead)=>lead.status==="HOT"||lead.status==="QUALIFIED").length:0;
   const won=leads.filter((lead)=>lead.status==="WON").length;
-  const serialized=leads.map((lead)=>({...lead,createdAt:lead.createdAt.toISOString()}));
+  const serialized=leads.map((lead)=>({...lead,score:scoring?lead.score:0,status:scoring?lead.status:"NEW",createdAt:lead.createdAt.toISOString()}));
 
   return <div className="mx-auto max-w-[1440px] pb-8">
     <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
       <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-black/35">Sales pipeline</p><h1 className="mt-2 text-3xl font-semibold tracking-[-.04em] sm:text-4xl">Leads</h1><p className="mt-2 text-sm text-black/45">Search, prioritize and follow up every prospect captured by your AI employee.</p></div>
     </div>
 
+    {!scoring&&<div className="mt-6 rounded-2xl border border-[#ead37a] bg-[#fff9df] px-5 py-4 text-xs leading-5 text-black/60"><strong className="text-black">Lead scoring unlocks on Starter.</strong> Free still captures leads, while Starter and higher automatically classify and prioritize buying intent.</div>}
     <div className="mt-7 grid gap-3 sm:grid-cols-3">
       <div className="rounded-2xl border border-black/[.055] bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-black/35">Total leads</p><p className="mt-2 text-3xl font-semibold tracking-[-.04em]">{leads.length}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#f4f5f7] text-black/45"><Users size={17}/></span></div></div>
-      <div className="rounded-2xl border border-black/[.055] bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-black/35">High intent</p><p className="mt-2 text-3xl font-semibold tracking-[-.04em] text-emerald-700">{hot}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><Flame size={17}/></span></div></div>
+      <div className="rounded-2xl border border-black/[.055] bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-black/35">{scoring?"High intent":"Lead scoring"}</p><p className="mt-2 text-3xl font-semibold tracking-[-.04em] text-emerald-700">{scoring?hot:"Starter+"}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700"><Flame size={17}/></span></div></div>
       <div className="rounded-2xl border border-black/[.055] bg-white p-5"><div className="flex items-start justify-between"><div><p className="text-xs text-black/35">Won</p><p className="mt-2 text-3xl font-semibold tracking-[-.04em] text-blue-700">{won}</p></div><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-700"><Trophy size={17}/></span></div></div>
     </div>
 
