@@ -142,24 +142,37 @@ export function supplierState() {
   return String(process.env.BILLING_SUPPLIER_STATE || "").trim();
 }
 
-export function taxBreakdownInclusive(totalPaise: number, customerState: string, customerCountry = "India") {
-  const rate = customerCountry.toLowerCase() === "india" ? gstRate() : 0;
-  const subtotalPaise = rate ? Math.round(totalPaise * 100 / (100 + rate)) : totalPaise;
-  const taxPaise = totalPaise - subtotalPaise;
+function splitTax(taxPaise: number, rate: number, customerState: string) {
   const sellerState = supplierState();
   const sameState = Boolean(sellerState) && sellerState.toLowerCase() === customerState.trim().toLowerCase();
   const cgstPaise = rate && sameState ? Math.floor(taxPaise / 2) : 0;
   const sgstPaise = rate && sameState ? taxPaise - cgstPaise : 0;
   const igstPaise = rate && !sameState ? taxPaise : 0;
+  return { cgstPaise, sgstPaise, igstPaise, taxType: rate ? (sameState ? "CGST+SGST" : "IGST") : "NONE", supplierState: sellerState };
+}
+
+export function taxBreakdownExclusive(subtotalPaise: number, customerState: string, customerCountry = "India") {
+  const rate = customerCountry.toLowerCase() === "india" ? gstRate() : 0;
+  const taxPaise = rate ? Math.round(subtotalPaise * rate / 100) : 0;
+  const totalPaise = subtotalPaise + taxPaise;
   return {
     subtotalPaise,
     taxPaise,
-    cgstPaise,
-    sgstPaise,
-    igstPaise,
+    ...splitTax(taxPaise, rate, customerState),
     totalPaise,
     taxRate: rate,
-    taxType: rate ? (sameState ? "CGST+SGST" : "IGST") : "NONE",
-    supplierState: sellerState,
+  };
+}
+
+export function taxBreakdownInclusive(totalPaise: number, customerState: string, customerCountry = "India") {
+  const rate = customerCountry.toLowerCase() === "india" ? gstRate() : 0;
+  const subtotalPaise = rate ? Math.round(totalPaise * 100 / (100 + rate)) : totalPaise;
+  const taxPaise = totalPaise - subtotalPaise;
+  return {
+    subtotalPaise,
+    taxPaise,
+    ...splitTax(taxPaise, rate, customerState),
+    totalPaise,
+    taxRate: rate,
   };
 }
