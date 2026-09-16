@@ -2,19 +2,20 @@
 
 :root { --bg:#f4f1e8; --ink:#151515; --muted:#6b7280; --card:#fff; --accent:#ffdf67; }
 * { box-sizing:border-box; }
-html { background:var(--bg); scroll-behavior:smooth; overflow-x:hidden; }
-body { margin:0; min-width:0; overflow-x:hidden; background:var(--bg); color:var(--ink); font-family:Arial,Helvetica,sans-serif; }
+html { background:var(--bg); scroll-behavior:smooth; overflow-x:clip; }
+body { margin:0; min-width:0; overflow-x:clip; background:var(--bg); color:var(--ink); font-family:Arial,Helvetica,sans-serif; }
 @layer base { a { text-decoration:none; } }
 
 /* Homepage now uses the shared branded header/footer from app/page.tsx. */
 .homepage-shared-chrome > main > header:first-child,
 .homepage-shared-chrome > main > footer:last-child { display:none !important; }
-.homepage-shared-chrome > main { overflow-x:clip !important; }
-.homepage-shared-chrome > header:first-child { position:sticky !important; top:0; z-index:80; }
+.homepage-shared-chrome { overflow:visible !important; }
+.homepage-shared-chrome > main { overflow-x:clip !important; overflow-y:visible !important; }
+.homepage-shared-chrome > header:first-child { position:sticky !important; top:0 !important; z-index:100 !important; }
 
 /* Public marketing header: stay pinned while the page scrolls. */
 main:has(> header:first-child .premium-nav) { overflow-x:clip !important; overflow-y:visible !important; }
-main > header:first-child:has(.premium-nav) { position:sticky !important; top:0; z-index:80; }
+main > header:first-child:has(.premium-nav) { position:sticky !important; top:0 !important; z-index:100 !important; }
 
 .dashboard-sidebar-scroll { scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.14) transparent; }
 .dashboard-sidebar-scroll::-webkit-scrollbar { width:4px; }
