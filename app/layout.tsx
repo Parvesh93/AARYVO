@@ -13,6 +13,11 @@ export const metadata: Metadata = {
   description: "AARYVO answers website enquiries, qualifies prospects, captures leads and books appointments automatically — 24/7.",
   applicationName: "AARYVO",
   keywords: ["AI sales agent", "AI sales employee", "website chatbot", "lead qualification", "AI lead generation", "appointment booking"],
+  icons: {
+    icon: "/aaryvo-icon.webp",
+    shortcut: "/aaryvo-icon.webp",
+    apple: "/aaryvo-icon.webp",
+  },
   alternates: {
     canonical: "/",
   },
