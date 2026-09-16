@@ -1,4 +1,5 @@
 import Link from "next/link";
+import BrandLogo from "./BrandLogo";
 
 export default function MarketingFooter() {
   return (
@@ -6,8 +7,8 @@ export default function MarketingFooter() {
       <div className="mx-auto max-w-[1380px]">
         <div className="grid gap-10 md:grid-cols-[1.2fr_.8fr_.8fr]">
           <div>
-            <div className="text-lg font-semibold tracking-[.24em]">AARYVO</div>
-            <p className="mt-3 max-w-sm text-sm leading-6 text-white/40">AI sales employees for businesses that want every website conversation to move somewhere useful.</p>
+            <BrandLogo variant="full" theme="light" className="h-[38px] w-auto object-contain" />
+            <p className="mt-5 max-w-sm text-sm leading-6 text-white/40">AI sales employees for businesses that want every website conversation to move somewhere useful.</p>
             <p className="mt-5 text-xs leading-6 text-white/35">AARYVO is a product of <span className="text-white/60">PP DESIGN AND TECH</span>.<br />Payments and GST invoices are issued by PP DESIGN AND TECH.<br />GSTIN: 07CQXPP5370D1ZB</p>
           </div>
           <div>
