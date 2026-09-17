@@ -3,10 +3,157 @@ import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/token-crypto";
 import { createEmailLog, markEmailFailed, markEmailSent } from "@/lib/email-analytics";
 
-function platformMailConfig(){const host=process.env.SMTP_HOST,user=process.env.SMTP_USER,pass=process.env.SMTP_PASS;if(!host||!user||!pass)return null;const port=Number(process.env.SMTP_PORT||587);return{transporter:nodemailer.createTransport({host,port,secure:port===465,auth:{user,pass}}),from:process.env.SMTP_FROM||`AARYVO <${user}>`,source:"aaryvo" as const}}
-export async function workspaceMailConfig(businessId:string){const business=await prisma.business.findUnique({where:{id:businessId},select:{customSmtpEnabled:true,smtpHost:true,smtpPort:true,smtpSecure:true,smtpUser:true,smtpPasswordEncrypted:true,smtpFromName:true,smtpFromEmail:true}});if(business?.customSmtpEnabled&&business.smtpHost&&business.smtpPort&&business.smtpUser&&business.smtpPasswordEncrypted&&business.smtpFromEmail)return{transporter:nodemailer.createTransport({host:business.smtpHost,port:business.smtpPort,secure:business.smtpSecure,auth:{user:business.smtpUser,pass:decryptToken(business.smtpPasswordEncrypted)}}),from:business.smtpFromName?`${business.smtpFromName} <${business.smtpFromEmail}>`:business.smtpFromEmail,source:"workspace" as const};return platformMailConfig()}
-function trackingBase(){return(process.env.NEXT_PUBLIC_APP_URL||"https://aaryvo.ppdesigntech.com").replace(/\/$/,"")}
-function addTracking(html:string,id:string){const base=trackingBase();const tracked=html.replace(/href=(['"])(https?:\/\/[^'"]+)\1/gi,(all,q,url)=>{try{const parsed=new URL(url);if(parsed.origin!==new URL(base).origin)return all;return`href=${q}${base}/api/email/track/click/${id}?url=${encodeURIComponent(url)}${q}`}catch{return all}});return`${tracked}<img src="${base}/api/email/track/open/${id}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;opacity:0" />`}
-async function sendWithAnalytics(input:{businessId?:string|null;to:string;subject:string;text?:string;html?:string;category:string;mail:NonNullable<ReturnType<typeof platformMailConfig>>}){const id=await createEmailLog({businessId:input.businessId||null,recipient:input.to,subject:input.subject,category:input.category,source:input.mail.source});try{const info=await input.mail.transporter.sendMail({from:input.mail.from,to:input.to,subject:input.subject,text:input.text,html:input.html?addTracking(input.html,id):undefined});await markEmailSent(id);return{...info,analyticsId:id}}catch(error){await markEmailFailed(id,error);throw error}}
-export async function sendTrackedEmail(input:{businessId:string;to:string;subject:string;text?:string;html?:string;category:string}){const mail=await workspaceMailConfig(input.businessId);if(!mail)throw new Error("Email delivery is not configured");return sendWithAnalytics({...input,mail})}
-export async function sendTrackedPlatformEmail(input:{to:string;subject:string;text?:string;html?:string;category:string}){const mail=platformMailConfig();if(!mail)throw new Error("Platform email delivery is not configured");return sendWithAnalytics({...input,businessId:null,mail})}
+type MailConfig = {
+  transporter: ReturnType<typeof nodemailer.createTransport>;
+  from: string;
+  source: "workspace" | "aaryvo";
+};
+
+function platformMailConfig(): MailConfig | null {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host || !user || !pass) return null;
+
+  const port = Number(process.env.SMTP_PORT || 587);
+
+  return {
+    transporter: nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
+    }),
+    from: process.env.SMTP_FROM || `AARYVO <${user}>`,
+    source: "aaryvo",
+  };
+}
+
+export async function workspaceMailConfig(
+  businessId: string,
+): Promise<MailConfig | null> {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      customSmtpEnabled: true,
+      smtpHost: true,
+      smtpPort: true,
+      smtpSecure: true,
+      smtpUser: true,
+      smtpPasswordEncrypted: true,
+      smtpFromName: true,
+      smtpFromEmail: true,
+    },
+  });
+
+  if (
+    business?.customSmtpEnabled &&
+    business.smtpHost &&
+    business.smtpPort &&
+    business.smtpUser &&
+    business.smtpPasswordEncrypted &&
+    business.smtpFromEmail
+  ) {
+    return {
+      transporter: nodemailer.createTransport({
+        host: business.smtpHost,
+        port: business.smtpPort,
+        secure: business.smtpSecure,
+        auth: {
+          user: business.smtpUser,
+          pass: decryptToken(business.smtpPasswordEncrypted),
+        },
+      }),
+      from: business.smtpFromName
+        ? `${business.smtpFromName} <${business.smtpFromEmail}>`
+        : business.smtpFromEmail,
+      source: "workspace",
+    };
+  }
+
+  return platformMailConfig();
+}
+
+function trackingBase() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL || "https://aaryvo.ppdesigntech.com"
+  ).replace(/\/$/, "");
+}
+
+function addTracking(html: string, id: string) {
+  const base = trackingBase();
+  const tracked = html.replace(
+    /href=(['"])(https?:\/\/[^'"]+)\1/gi,
+    (all, q, url) => {
+      try {
+        const parsed = new URL(url);
+        if (parsed.origin !== new URL(base).origin) return all;
+        return `href=${q}${base}/api/email/track/click/${id}?url=${encodeURIComponent(url)}${q}`;
+      } catch {
+        return all;
+      }
+    },
+  );
+
+  return `${tracked}<img src="${base}/api/email/track/open/${id}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;opacity:0" />`;
+}
+
+async function sendWithAnalytics(input: {
+  businessId?: string | null;
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+  category: string;
+  mail: MailConfig;
+}) {
+  const id = await createEmailLog({
+    businessId: input.businessId || null,
+    recipient: input.to,
+    subject: input.subject,
+    category: input.category,
+    source: input.mail.source,
+  });
+
+  try {
+    const info = await input.mail.transporter.sendMail({
+      from: input.mail.from,
+      to: input.to,
+      subject: input.subject,
+      text: input.text,
+      html: input.html ? addTracking(input.html, id) : undefined,
+    });
+
+    await markEmailSent(id);
+    return { ...info, analyticsId: id };
+  } catch (error) {
+    await markEmailFailed(id, error);
+    throw error;
+  }
+}
+
+export async function sendTrackedEmail(input: {
+  businessId: string;
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+  category: string;
+}) {
+  const mail = await workspaceMailConfig(input.businessId);
+  if (!mail) throw new Error("Email delivery is not configured");
+  return sendWithAnalytics({ ...input, mail });
+}
+
+export async function sendTrackedPlatformEmail(input: {
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+  category: string;
+}) {
+  const mail = platformMailConfig();
+  if (!mail) throw new Error("Platform email delivery is not configured");
+  return sendWithAnalytics({ ...input, businessId: null, mail });
+}
