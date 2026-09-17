@@ -1,61 +1,9 @@
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/token-crypto";
+import { createEmailLog, markEmailFailed, markEmailSent } from "@/lib/email-analytics";
 
-export async function workspaceMailConfig(businessId: string) {
-  const business = await prisma.business.findUnique({
-    where: { id: businessId },
-    select: {
-      customSmtpEnabled: true,
-      smtpHost: true,
-      smtpPort: true,
-      smtpSecure: true,
-      smtpUser: true,
-      smtpPasswordEncrypted: true,
-      smtpFromName: true,
-      smtpFromEmail: true,
-    },
-  });
-
-  if (
-    business?.customSmtpEnabled &&
-    business.smtpHost &&
-    business.smtpPort &&
-    business.smtpUser &&
-    business.smtpPasswordEncrypted &&
-    business.smtpFromEmail
-  ) {
-    return {
-      transporter: nodemailer.createTransport({
-        host: business.smtpHost,
-        port: business.smtpPort,
-        secure: business.smtpSecure,
-        auth: {
-          user: business.smtpUser,
-          pass: decryptToken(business.smtpPasswordEncrypted),
-        },
-      }),
-      from: business.smtpFromName
-        ? `${business.smtpFromName} <${business.smtpFromEmail}>`
-        : business.smtpFromEmail,
-      source: "workspace" as const,
-    };
-  }
-
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return null;
-
-  const port = Number(process.env.SMTP_PORT || 587);
-  return {
-    transporter: nodemailer.createTransport({
-      host,
-      port,
-      secure: port === 465,
-      auth: { user, pass },
-    }),
-    from: process.env.SMTP_FROM || `AARYVO <${user}>`,
-    source: "aaryvo" as const,
-  };
-}
+export async function workspaceMailConfig(businessId:string){const business=await prisma.business.findUnique({where:{id:businessId},select:{customSmtpEnabled:true,smtpHost:true,smtpPort:true,smtpSecure:true,smtpUser:true,smtpPasswordEncrypted:true,smtpFromName:true,smtpFromEmail:true}});if(business?.customSmtpEnabled&&business.smtpHost&&business.smtpPort&&business.smtpUser&&business.smtpPasswordEncrypted&&business.smtpFromEmail)return{transporter:nodemailer.createTransport({host:business.smtpHost,port:business.smtpPort,secure:business.smtpSecure,auth:{user:business.smtpUser,pass:decryptToken(business.smtpPasswordEncrypted)}}),from:business.smtpFromName?`${business.smtpFromName} <${business.smtpFromEmail}>`:business.smtpFromEmail,source:"workspace" as const};const host=process.env.SMTP_HOST,user=process.env.SMTP_USER,pass=process.env.SMTP_PASS;if(!host||!user||!pass)return null;const port=Number(process.env.SMTP_PORT||587);return{transporter:nodemailer.createTransport({host,port,secure:port===465,auth:{user,pass}}),from:process.env.SMTP_FROM||`AARYVO <${user}>`,source:"aaryvo" as const}}
+function trackingBase(){return(process.env.NEXT_PUBLIC_APP_URL||"https://aaryvo.ppdesigntech.com").replace(/\/$/,"")}
+function addTracking(html:string,id:string){const base=trackingBase();const tracked=html.replace(/href=(['"])(https?:\/\/[^'"]+)\1/gi,(all,q,url)=>{try{const parsed=new URL(url);if(parsed.origin!==new URL(base).origin)return all;return`href=${q}${base}/api/email/track/click/${id}?url=${encodeURIComponent(url)}${q}`}catch{return all}});return`${tracked}<img src="${base}/api/email/track/open/${id}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;opacity:0" />`}
+export async function sendTrackedEmail(input:{businessId:string;to:string;subject:string;text?:string;html?:string;category:string}){const mail=await workspaceMailConfig(input.businessId);if(!mail)throw new Error("Email delivery is not configured");const id=await createEmailLog({businessId:input.businessId,recipient:input.to,subject:input.subject,category:input.category,source:mail.source});try{const info=await mail.transporter.sendMail({from:mail.from,to:input.to,subject:input.subject,text:input.text,html:input.html?addTracking(input.html,id):undefined});await markEmailSent(id);return{...info,analyticsId:id}}catch(error){await markEmailFailed(id,error);throw error}}
