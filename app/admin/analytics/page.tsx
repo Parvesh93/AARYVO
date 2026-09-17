@@ -1,0 +1,10 @@
+import { platformAnalyticsSummary } from "@/lib/platform-analytics";
+
+export default async function AnalyticsPage(){
+ const data=await platformAnalyticsSummary(30); const max=Math.max(1,...data.daily.map(d=>d.views));
+ return <div><p className="text-xs font-semibold uppercase tracking-[.18em] text-black/35">Acquisition</p><h1 className="mt-2 text-4xl font-semibold tracking-[-.045em]">Website analytics</h1><p className="mt-2 text-sm text-black/45">First-party AARYVO traffic analytics · last 30 days.</p>
+ <section className="mt-8 grid gap-3 sm:grid-cols-3">{[["Visitors",data.visitors],["Sessions",data.sessions],["Page views",data.views]].map(([l,v])=><div key={l as string} className="rounded-3xl border border-black/[.055] bg-white p-6"><p className="text-xs text-black/35">{l}</p><p className="mt-3 text-3xl font-semibold tracking-[-.04em]">{v}</p></div>)}</section>
+ <section className="mt-4 grid gap-4 xl:grid-cols-[1.5fr_1fr]"><div className="rounded-3xl border border-black/[.055] bg-white p-6"><h2 className="font-semibold">Traffic trend</h2><p className="mt-1 text-xs text-black/35">Daily page views</p><div className="mt-8 flex h-52 items-end gap-1.5">{data.daily.length?data.daily.map(d=><div key={d.day} title={`${d.day}: ${d.views} views`} className="min-w-1 flex-1 rounded-t-md bg-[#111319]" style={{height:`${Math.max(4,d.views/max*100)}%`}}/>):<div className="m-auto text-sm text-black/30">Traffic will appear after deployment.</div>}</div></div>
+ <div className="rounded-3xl border border-black/[.055] bg-white p-6"><h2 className="font-semibold">Top pages</h2><div className="mt-5 space-y-3">{data.topPages.map((p,i)=><div key={p.path} className="flex items-center justify-between gap-4 border-b border-black/[.05] pb-3 text-sm"><div className="min-w-0"><span className="mr-2 text-black/25">{i+1}</span><span className="break-all">{p.path}</span></div><strong>{p.views}</strong></div>)}{!data.topPages.length&&<p className="text-sm text-black/30">No page views recorded yet.</p>}</div></div></section>
+ </div>;
+}
