@@ -21,6 +21,8 @@ export function ensurePlatformAnalyticsTables(){
       INDEX idx_platform_pageview_sessionId (sessionId),
       INDEX idx_platform_pageview_path (path(191))
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
+    /* Remove Hostinger/LiteSpeed cache query strings recorded by the first tracker version. */
+    await prisma.$executeRawUnsafe(`UPDATE platform_pageview SET path=SUBSTRING_INDEX(path,'?',1) WHERE path LIKE '%?LSCWP_CTRL=%' OR path LIKE '%&nocache=%'`);
   })();
   return ready;
 }
