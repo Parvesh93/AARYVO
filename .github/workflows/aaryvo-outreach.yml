@@ -1,11 +1,6 @@
 name: Aaryvo Outreach
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/aaryvo-outreach.yml"
   schedule:
     # 10:00 AM India Standard Time (UTC+5:30), Monday-Friday.
     - cron: "30 4 * * 1-5"
@@ -20,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Trigger Aaryvo outreach worker
+      - name: Prepare Aaryvo outreach review batch
         env:
           OUTREACH_AGENT_SECRET: ${{ secrets.OUTREACH_AGENT_SECRET }}
         run: |
@@ -36,6 +31,6 @@ jobs:
           echo
 
           if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
-            echo "Aaryvo outreach worker returned HTTP $http_code"
+            echo "Aaryvo outreach review preparation returned HTTP $http_code"
             exit 1
           fi
