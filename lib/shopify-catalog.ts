@@ -22,6 +22,8 @@ function normalize(value: string) {
 const TERM_SYNONYMS: Record<string, string[]> = {
   jewellery: ["jewelry"],
   jewelry: ["jewellery"],
+  ring: ["rings"],
+  rings: ["ring"],
   bracelet: ["bracelets", "bangle", "bangles"],
   bracelets: ["bracelet", "bangle", "bangles"],
   bangle: ["bracelet", "bracelets", "bangles"],
@@ -220,88 +222,144 @@ export async function searchShopifyCatalog(
   const store = await connectedStore(businessId);
   if (!store || store.status !== "CONNECTED") return [];
 
-  const knowledgeMatches = agentId && terms.length
-    ? await prisma.knowledgeItem.findMany({
+  // Rich Shopify knowledge is optional enrichment. Never let a knowledge query
+  // failure prevent structured product search from returning real products.
+  const knowledgeByShopifyId = new Map<string, string>();
+
+  if (agentId && terms.length) {
+    try {
+      const knowledgeMatches = await prisma.knowledgeItem.findMany({
         where: {
           agentId,
-          source: { startsWith: "shopify://product/" },
           OR: terms.flatMap((term) => [
             { title: { contains: term } },
             { content: { contains: term } },
           ]),
         },
         select: { source: true, content: true },
-        take: 80,
-      })
-    : [];
+        take: 100,
+      });
 
-  const knowledgeByShopifyId = new Map<string, string>();
-  for (const item of knowledgeMatches) {
-    const encodedId = item.source.slice("shopify://product/".length);
-    if (!encodedId) continue;
-    try {
-      const shopifyId = decodeURIComponent(encodedId);
-      knowledgeByShopifyId.set(shopifyId, item.content);
-    } catch {}
+      for (const item of knowledgeMatches) {
+        if (!item.source.startsWith("shopify://product/")) continue;
+        const encodedId = item.source.slice("shopify://product/".length);
+        if (!encodedId) continue;
+        try {
+          knowledgeByShopifyId.set(decodeURIComponent(encodedId), item.content);
+        } catch {}
+      }
+    } catch (error) {
+      console.error("AARYVO Shopify knowledge search error", error);
+    }
   }
-  const knowledgeIds = [...knowledgeByShopifyId.keys()];
 
-  const where = {
-    storeId: store.id,
-    status: "ACTIVE",
-    ...(terms.length
-      ? {
-          OR: [
-            ...terms.flatMap((term) => [
-              { title: { contains: term } },
-              { vendor: { contains: term } },
-              { productType: { contains: term } },
-              { tags: { contains: term } },
-              { description: { contains: term } },
-              { variants: { some: { optionSummary: { contains: term } } } },
-            ]),
-            ...(knowledgeIds.length ? [{ shopifyProductId: { in: knowledgeIds } }] : []),
-          ],
-        }
-      : {}),
-    ...(maxPrice !== null ? { minPrice: { lte: maxPrice } } : {}),
-    ...(wantsAvailable ? { variants: { some: { availableForSale: true } } } : {}),
+  const includeVariants = {
+    variants: {
+      orderBy: { price: "asc" as const },
+      take: 16,
+    },
   };
 
-  const products = await prisma.shopifyProduct.findMany({
-    where,
-    include: {
-      variants: {
-        orderBy: { price: "asc" },
-        take: 12,
-      },
-    },
-    orderBy: [{ syncedAt: "desc" }],
-    take: 60,
+  const rows = new Map<string, Awaited<ReturnType<typeof prisma.shopifyProduct.findMany>>[number]>();
+
+  async function addRows(
+    found: Awaited<ReturnType<typeof prisma.shopifyProduct.findMany>>,
+  ) {
+    for (const product of found) rows.set(product.id, product);
+  }
+
+  if (!terms.length && broadDiscovery) {
+    await addRows(await prisma.shopifyProduct.findMany({
+      where: { storeId: store.id, status: "ACTIVE" },
+      include: includeVariants,
+      orderBy: { syncedAt: "desc" },
+      take: 100,
+    }));
+  } else {
+    // First search the strongest structured commerce fields. This keeps queries
+    // such as "rings", "bangles" or "skincare" reliable even if rich knowledge
+    // indexing is unavailable.
+    const primaryOr = terms.flatMap((term) => [
+      { title: { contains: term } },
+      { productType: { contains: term } },
+      { tags: { contains: term } },
+      { vendor: { contains: term } },
+    ]);
+
+    if (primaryOr.length) {
+      await addRows(await prisma.shopifyProduct.findMany({
+        where: {
+          storeId: store.id,
+          status: "ACTIVE",
+          OR: primaryOr,
+        },
+        include: includeVariants,
+        take: 120,
+      }));
+    }
+
+    // Search descriptions separately so a very broad description match cannot
+    // crowd out exact title/product-type matches before ranking.
+    if (rows.size < 80 && terms.length) {
+      await addRows(await prisma.shopifyProduct.findMany({
+        where: {
+          storeId: store.id,
+          status: "ACTIVE",
+          OR: terms.map((term) => ({ description: { contains: term } })),
+        },
+        include: includeVariants,
+        take: 80,
+      }));
+    }
+
+    const knowledgeIds = [...knowledgeByShopifyId.keys()];
+    if (knowledgeIds.length) {
+      await addRows(await prisma.shopifyProduct.findMany({
+        where: {
+          storeId: store.id,
+          status: "ACTIVE",
+          shopifyProductId: { in: knowledgeIds },
+        },
+        include: includeVariants,
+        take: 100,
+      }));
+    }
+  }
+
+  const candidates = [...rows.values()].filter((product) => {
+    if (maxPrice !== null && (product.minPrice === null || product.minPrice > maxPrice)) return false;
+    if (wantsAvailable && !product.variants.some((variant) => variant.availableForSale)) return false;
+    return true;
   });
 
-  const scored = products.map((product) => {
+  const scored = candidates.map((product) => {
     const title = normalize(product.title);
     const type = normalize(product.productType || "");
     const vendor = normalize(product.vendor || "");
     const tags = normalize(product.tags || "");
-    const description = normalize(product.description || "").slice(0, 2500);
-    const variantText = normalize(product.variants.map((variant) => variant.optionSummary || variant.title).join(" "));
+    const description = normalize(product.description || "").slice(0, 3000);
+    const variantText = normalize(
+      product.variants.map((variant) => variant.optionSummary || variant.title).join(" "),
+    );
     const richKnowledge = knowledgeByShopifyId.get(product.shopifyProductId) || "";
-    const knowledgeText = normalize(richKnowledge).slice(0, 12000);
+    const knowledgeText = normalize(richKnowledge).slice(0, 16000);
 
     let score = terms.length ? 0 : 1;
     for (const term of terms) {
-      if (title.includes(term)) score += 8;
-      if (type.includes(term)) score += 5;
-      if (tags.includes(term)) score += 4;
+      if (title === term) score += 14;
+      else if (title.includes(term)) score += 9;
+      if (type === term) score += 12;
+      else if (type.includes(term)) score += 7;
+      if (tags.includes(term)) score += 5;
       if (vendor.includes(term)) score += 3;
-      if (variantText.includes(term)) score += 3;
+      if (variantText.includes(term)) score += 4;
       if (knowledgeText.includes(term)) score += 4;
       if (description.includes(term)) score += 1;
     }
+
     if (product.variants.some((variant) => variant.availableForSale)) score += 2;
     if (maxPrice !== null && product.minPrice !== null && product.minPrice <= maxPrice) score += 3;
+
     return { product, score };
   });
 
@@ -309,62 +367,58 @@ export async function searchShopifyCatalog(
     .filter(({ score }) => score > 0)
     .sort((a, b) => b.score - a.score);
 
+  const target = Math.max(1, Math.min(limit, 12));
   const selected = !terms.length && broadDiscovery
     ? (() => {
         const output: typeof ranked = [];
         const seenTypes = new Set<string>();
 
-        // Broad discovery should show the breadth of the store instead of four
-        // products from whichever category happened to sync most recently.
         for (const row of ranked) {
           const key = normalize(row.product.productType || row.product.vendor || row.product.title);
           if (key && !seenTypes.has(key)) {
             seenTypes.add(key);
             output.push(row);
           }
-          if (output.length >= Math.max(1, Math.min(limit, 12))) break;
+          if (output.length >= target) break;
         }
 
-        if (output.length < Math.max(1, Math.min(limit, 12))) {
-          for (const row of ranked) {
-            if (!output.includes(row)) output.push(row);
-            if (output.length >= Math.max(1, Math.min(limit, 12))) break;
-          }
+        for (const row of ranked) {
+          if (output.length >= target) break;
+          if (!output.includes(row)) output.push(row);
         }
         return output;
       })()
-    : ranked.slice(0, Math.max(1, Math.min(limit, 12)));
+    : ranked.slice(0, target);
 
-  return selected
-    .map(({ product }) => ({
-      id: product.id,
-      title: product.title,
-      description: (product.description || "").replace(/\s+/g, " ").trim().slice(0, 420),
-      vendor: product.vendor,
-      productType: product.productType,
-      tags: product.tags,
-      imageUrl: product.featuredImageUrl,
-      url: safeStorefrontUrl(
-        store.business.websiteUrl,
-        store.shopDomain,
-        product.handle,
-        product.onlineStoreUrl,
-      ),
-      minPrice: product.minPrice,
-      maxPrice: product.maxPrice,
-      currencyCode: product.currencyCode,
-      availableForSale: product.variants.some((variant) => variant.availableForSale),
-      variants: product.variants.map((variant) => ({
-        id: variant.id,
-        title: variant.title,
-        price: variant.price,
-        compareAtPrice: variant.compareAtPrice,
-        availableForSale: variant.availableForSale,
-        inventoryQuantity: variant.inventoryQuantity,
-        optionSummary: variant.optionSummary,
-      })),
-      knowledge: knowledgeByShopifyId.get(product.shopifyProductId) || null,
-    }));
+  return selected.map(({ product }) => ({
+    id: product.id,
+    title: product.title,
+    description: (product.description || "").replace(/\s+/g, " ").trim().slice(0, 420),
+    vendor: product.vendor,
+    productType: product.productType,
+    tags: product.tags,
+    imageUrl: product.featuredImageUrl,
+    url: safeStorefrontUrl(
+      store.business.websiteUrl,
+      store.shopDomain,
+      product.handle,
+      product.onlineStoreUrl,
+    ),
+    minPrice: product.minPrice,
+    maxPrice: product.maxPrice,
+    currencyCode: product.currencyCode,
+    availableForSale: product.variants.some((variant) => variant.availableForSale),
+    variants: product.variants.map((variant) => ({
+      id: variant.id,
+      title: variant.title,
+      price: variant.price,
+      compareAtPrice: variant.compareAtPrice,
+      availableForSale: variant.availableForSale,
+      inventoryQuantity: variant.inventoryQuantity,
+      optionSummary: variant.optionSummary,
+    })),
+    knowledge: knowledgeByShopifyId.get(product.shopifyProductId) || null,
+  }));
 }
 
 export function buildShopifyOverviewContext(overview: ShopifyCatalogOverview | null) {
