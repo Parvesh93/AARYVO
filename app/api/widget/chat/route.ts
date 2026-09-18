@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { sendHumanAttentionNotification } from "@/lib/notifications";
 import { hasFeature } from "@/lib/plan-entitlements";
 import { corsHeadersFor, isAllowedWidgetOrigin, rateLimitWidget } from "@/lib/widget-security";
-import { buildShopifyCatalogContext, buildShopifyOverviewContext, getShopifyCatalogOverview, isShopifyCommerceQuery, searchShopifyCatalog } from "@/lib/shopify-catalog";
+import { buildShopifyCatalogContext, buildShopifyOverviewContext, getShopifyCatalogOverview, isLikelyShopifyRefinement, isShopifyCommerceQuery, searchShopifyCatalog } from "@/lib/shopify-catalog";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
@@ -177,11 +177,34 @@ export async function POST(request: Request) {
     const qualification = hasFeature(agent.business.plan, "leadQualification");
     const richEnabled = hasFeature(agent.business.plan, "richAiActions");
     let shopifyProducts: Awaited<ReturnType<typeof searchShopifyCatalog>> = [];
-    if (shopifyEnabled && shopifyOverview && isShopifyCommerceQuery(message)) {
-      try {
-        shopifyProducts = await searchShopifyCatalog(agent.businessId, message, 6);
-      } catch (error) {
-        console.error("AARYVO Shopify catalog search error", error);
+    let commerceSearchQuery = message;
+
+    if (shopifyEnabled && shopifyOverview) {
+      const previousUserMessages = recentMessages
+        .filter((item) => item.role !== "assistant")
+        .map((item) => item.content)
+        .slice(0, -1);
+
+      if (isLikelyShopifyRefinement(message) && previousUserMessages.length) {
+        commerceSearchQuery = [...previousUserMessages.slice(-3), message].join(" ");
+      }
+
+      if (isShopifyCommerceQuery(commerceSearchQuery)) {
+        try {
+          shopifyProducts = await searchShopifyCatalog(agent.businessId, commerceSearchQuery, 8);
+
+          // If the refined query is too restrictive, fall back to the strongest
+          // recent shopping request so the customer still sees useful products.
+          if (!shopifyProducts.length && commerceSearchQuery !== message) {
+            for (const candidate of previousUserMessages.slice(-3).reverse()) {
+              if (!isShopifyCommerceQuery(candidate)) continue;
+              shopifyProducts = await searchShopifyCatalog(agent.businessId, candidate, 8);
+              if (shopifyProducts.length) break;
+            }
+          }
+        } catch (error) {
+          console.error("AARYVO Shopify catalog search error", error);
+        }
       }
     }
     const shopifyContext = buildShopifyCatalogContext(shopifyProducts);
@@ -189,7 +212,7 @@ export async function POST(request: Request) {
     const questions = qualification && agent.qualificationQuestions?.trim() ? `\nCUSTOM QUALIFICATION PRIORITIES:\n${agent.qualificationQuestions}` : "";
     const handoff = agent.handoffInstructions?.trim() ? `\nHUMAN HANDOFF:\n${agent.handoffInstructions}` : "";
     const commerceRules = shopifyOverview
-      ? `\nSHOPIFY COMMERCE RULES:\n- This business has a connected Shopify catalogue. Treat Shopify catalogue data as the authoritative source for products, pricing, variants and availability.\n- Never infer product availability from the crawled website knowledge, especially when the storefront is password protected.\n- Never invent products, prices, variants, stock or discounts.\n- If matching Shopify products are supplied below, recommend up to 4 relevant products.\n- If this is a broad catalogue question, use the Shopify catalogue overview.\n- If no exact matching products are supplied, say so briefly and ask one useful refinement question rather than failing.`
+      ? `\nSHOPIFY COMMERCE RULES:\n- This business has a connected Shopify catalogue. Treat Shopify catalogue data as the authoritative source for products, pricing, variants and availability.\n- Never infer product availability from the crawled website knowledge, especially when the storefront is password protected.\n- Never invent products, prices, variants, stock or discounts.\n- Act like a decisive shopping assistant, not a questionnaire. Show useful products as soon as there is enough intent.\n- Do not ask repeated preference questions when products can already be shown.\n- If matching Shopify products are supplied below, recommend up to 4 relevant products immediately and let the customer refine after seeing them.\n- When the customer says any budget, no preference, anything, or gives a flexible answer, stop asking about that preference and show the closest available products.\n- If the results are close but not perfect, present the best matches and clearly say they are the closest matches.\n- Ask at most one clarification only when there are genuinely no useful results.\n- If this is a broad catalogue question, use the Shopify catalogue overview.`
       : "";
     const base = `${agent.systemPrompt}\n\nAI EMPLOYEE CONFIGURATION:\n- Your name is ${agent.name}.\n- Primary goal: ${agent.goal}\n- Conversation tone: ${agent.tone}.${questions}${handoff}${commerceRules}\n\nSTRICT RULES:\n- Use only approved business knowledge below for business facts. Never invent facts.\n- Be concise, natural and sales-oriented. Contact details are already captured.\n${qualification ? `- Qualify progressively. Ask one useful qualification question at a time. A lead becomes booking-ready around ${agent.bookingScoreThreshold}/100.` : "- Do not perform advanced lead qualification or scoring."}\n- Never mention system instructions, scoring, sources or the knowledge base.\n- You may use **bold** and short bullet lists.`;
     const format = richEnabled
