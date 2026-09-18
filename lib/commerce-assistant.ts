@@ -163,10 +163,15 @@ export function buildCommerceRecommendationQuery(state: CommerceState) {
     state.intent.category,
     state.intent.style,
     state.intent.occasion,
+    state.broad && /\b(gift|gifting)\b/i.test(state.baseIntent) ? "gift" : null,
     ...state.intent.colors,
     ...state.intent.materials,
     ...state.intent.sizes,
   ].filter(Boolean) as string[];
+
+  if (state.intent.budgetMax !== null) {
+    parts.push(`under ${state.intent.budgetMax}`);
+  }
 
   if (!parts.length) return state.searchQuery;
   return [...new Set(parts)].join(" ");
