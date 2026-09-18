@@ -349,7 +349,15 @@ export async function searchShopifyCatalog(
 
   const ranked = scored
     .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => {
+      const aAvailable = a.product.variants.some((variant) => variant.availableForSale);
+      const bAvailable = b.product.variants.some((variant) => variant.availableForSale);
+
+      // For commerce recommendations, purchasable products always rank ahead
+      // of sold-out products. Relevance decides the order inside each group.
+      if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
+      return b.score - a.score;
+    });
 
   const target = Math.max(1, Math.min(limit, 12));
   const selected = !terms.length && broadDiscovery
