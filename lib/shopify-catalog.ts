@@ -7,6 +7,7 @@ const STOP_WORDS = new Set([
   "what","which","where","when","how","there","their","them","they","its","also","only","more","less",
   "type","types","sell","selling","sold","store","shop","catalog","catalogue","collection","collections",
   "recommend","recommended","recommendation","options","option","available","availability","stock","price","prices",
+  "hello","hey","thanks","thank","welcome","there","today","help",
 ]);
 
 function normalize(value: string) {
@@ -43,8 +44,9 @@ function isBroadDiscoveryQuery(query: string) {
 export function isShopifyCommerceQuery(query: string) {
   if (priceCeiling(query) !== null) return true;
   if (/\b(product|products|item|items|collection|collections|buy|shop|price|cost|size|colour|color|variant|stock|available|gift|gifting|recommend|suggest)\b/i.test(query)) return true;
-  const terms = searchTerms(query);
-  return terms.length > 0 && query.trim().split(/\s+/).length >= 2;
+  // A single meaningful word such as "pants", "jewellery" or "skincare"
+  // should be treated as a catalogue search when Shopify is connected.
+  return searchTerms(query).length > 0;
 }
 
 function safeStorefrontUrl(
@@ -113,39 +115,49 @@ export async function getShopifyCatalogOverview(
   const store = await connectedStore(businessId);
   if (!store || store.status !== "CONNECTED") return null;
 
-  const [productCount, sample] = await Promise.all([
-    prisma.shopifyProduct.count({
-      where: { storeId: store.id, status: "ACTIVE" },
+  const activeWhere = { storeId: store.id, status: "ACTIVE" as const };
+  const [productCount, productTypeGroups, vendorGroups, priceStats, currencyRow] = await Promise.all([
+    prisma.shopifyProduct.count({ where: activeWhere }),
+    prisma.shopifyProduct.groupBy({
+      by: ["productType"],
+      where: { ...activeWhere, productType: { not: null } },
+      _count: { productType: true },
+      orderBy: { _count: { productType: "desc" } },
+      take: 40,
     }),
-    prisma.shopifyProduct.findMany({
-      where: { storeId: store.id, status: "ACTIVE" },
-      select: {
-        productType: true,
-        vendor: true,
-        currencyCode: true,
-        minPrice: true,
-        maxPrice: true,
-      },
-      take: 250,
+    prisma.shopifyProduct.groupBy({
+      by: ["vendor"],
+      where: { ...activeWhere, vendor: { not: null } },
+      _count: { vendor: true },
+      orderBy: { _count: { vendor: "desc" } },
+      take: 30,
+    }),
+    prisma.shopifyProduct.aggregate({
+      where: activeWhere,
+      _min: { minPrice: true },
+      _max: { maxPrice: true },
+    }),
+    prisma.shopifyProduct.findFirst({
+      where: { ...activeWhere, currencyCode: { not: null } },
+      select: { currencyCode: true },
     }),
   ]);
 
-  const productTypes = [...new Set(sample.map((item) => item.productType?.trim()).filter(Boolean) as string[])]
-    .slice(0, 30);
-  const vendors = [...new Set(sample.map((item) => item.vendor?.trim()).filter(Boolean) as string[])]
-    .slice(0, 20);
-  const prices = sample
-    .flatMap((item) => [item.minPrice, item.maxPrice])
-    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+  const productTypes = productTypeGroups
+    .map((item) => item.productType?.trim())
+    .filter(Boolean) as string[];
+  const vendors = vendorGroups
+    .map((item) => item.vendor?.trim())
+    .filter(Boolean) as string[];
 
   return {
     shopDomain: store.shopDomain,
     productCount,
     productTypes,
     vendors,
-    currencyCode: sample.find((item) => item.currencyCode)?.currencyCode || null,
-    minPrice: prices.length ? Math.min(...prices) : null,
-    maxPrice: prices.length ? Math.max(...prices) : null,
+    currencyCode: currencyRow?.currencyCode || null,
+    minPrice: priceStats._min.minPrice ?? null,
+    maxPrice: priceStats._max.maxPrice ?? null,
   };
 }
 
@@ -217,10 +229,37 @@ export async function searchShopifyCatalog(
     return { product, score };
   });
 
-  return scored
+  const ranked = scored
     .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, Math.max(1, Math.min(limit, 12)))
+    .sort((a, b) => b.score - a.score);
+
+  const selected = !terms.length && broadDiscovery
+    ? (() => {
+        const output: typeof ranked = [];
+        const seenTypes = new Set<string>();
+
+        // Broad discovery should show the breadth of the store instead of four
+        // products from whichever category happened to sync most recently.
+        for (const row of ranked) {
+          const key = normalize(row.product.productType || row.product.vendor || row.product.title);
+          if (key && !seenTypes.has(key)) {
+            seenTypes.add(key);
+            output.push(row);
+          }
+          if (output.length >= Math.max(1, Math.min(limit, 12))) break;
+        }
+
+        if (output.length < Math.max(1, Math.min(limit, 12))) {
+          for (const row of ranked) {
+            if (!output.includes(row)) output.push(row);
+            if (output.length >= Math.max(1, Math.min(limit, 12))) break;
+          }
+        }
+        return output;
+      })()
+    : ranked.slice(0, Math.max(1, Math.min(limit, 12)));
+
+  return selected
     .map(({ product }) => ({
       id: product.id,
       title: product.title,
