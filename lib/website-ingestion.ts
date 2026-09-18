@@ -21,6 +21,14 @@ function isPrivateIp(ip: string) {
   return value === "::1" || value.startsWith("fc") || value.startsWith("fd") || value.startsWith("fe80:");
 }
 
+function normalizedHostname(hostname: string) {
+  return hostname.toLowerCase().replace(/^www\./, "");
+}
+
+function sameSiteHostname(a: string, b: string) {
+  return normalizedHostname(a) === normalizedHostname(b);
+}
+
 async function assertSafeUrl(input: string) {
   const url = new URL(input);
   if (!["http:", "https:"].includes(url.protocol)) throw new Error("Only HTTP/HTTPS websites can be scanned.");
@@ -78,7 +86,7 @@ async function fetchHtml(url: URL, allowedHostname: string) {
   let current = url;
   for (let redirectCount = 0; redirectCount <= 3; redirectCount++) {
     await assertSafeUrl(current.toString());
-    if (current.hostname.toLowerCase() !== allowedHostname) throw new Error("Cross-domain redirects are not allowed.");
+    if (!sameSiteHostname(current.hostname, allowedHostname)) throw new Error("Cross-domain redirects are not allowed.");
 
     const response = await fetch(current, {
       redirect: "manual",
@@ -117,7 +125,7 @@ function parsePage(html: string, pageUrl: URL) {
     try {
       const link = new URL(href, pageUrl);
       link.hash = "";
-      if (link.protocol === pageUrl.protocol && link.hostname === pageUrl.hostname) {
+      if (["http:", "https:"].includes(link.protocol) && sameSiteHostname(link.hostname, pageUrl.hostname)) {
         const path = link.pathname.toLowerCase();
         const useful = path === "/" || /(about|service|solution|product|pricing|faq|contact|project|portfolio|collection)/.test(path);
         if (useful) links.add(link.toString());
@@ -142,7 +150,7 @@ export async function crawlWebsite(input: string): Promise<CrawledPage[]> {
     visited.add(next);
     try {
       const target = await assertSafeUrl(next);
-      if (target.hostname.toLowerCase() !== allowedHostname) continue;
+      if (!sameSiteHostname(target.hostname, allowedHostname)) continue;
       const { html, finalUrl } = await fetchHtml(target, allowedHostname);
       const parsed = parsePage(html, finalUrl);
       if (parsed.content.length >= 80) pages.push({ url: finalUrl.toString(), title: parsed.title.slice(0, 250), content: parsed.content });
