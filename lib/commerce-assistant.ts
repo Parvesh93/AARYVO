@@ -355,11 +355,20 @@ export function buildCommerceProductReply(params: {
     params.products.length,
   );
 
+  const first = params.products[0]?.title;
+  const second = params.products[1]?.title;
+  const startingPoint =
+    first && second
+      ? `I’d start with **${first}** and **${second}** based on what you told me.`
+      : first
+        ? `**${first}** is the strongest match I found.`
+        : "";
+
   if (params.alternative) {
-    return `I couldn’t find that exact combination, but I found ${count} close alternatives that are available now. These are the best options I’d show you at the counter.`;
+    return `I couldn’t find that exact combination, but I found ${count} close alternatives that are available now. ${startingPoint} I’ve shown the best alternatives below.`.trim();
   }
 
-  return `I found ${count} good matches in the live catalogue. I’ve put the strongest options first — you can open any product or refine by style, colour, size, material, occasion or price.`;
+  return `I found ${count} good matches in the live catalogue. ${startingPoint} You can open any product below, or refine the selection further.`.trim();
 }
 
 export function desiredCommerceProductCount(state: CommerceState) {
