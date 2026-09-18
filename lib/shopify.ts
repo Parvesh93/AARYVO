@@ -6,7 +6,7 @@ import { normalizePlan } from "@/lib/plan-entitlements";
 const API_VERSION = "2026-07";
 const DEFAULT_SCOPES = ["read_products", "read_inventory"];
 
-function appUrl() {
+export function shopifyAppUrl() {
   return (process.env.NEXT_PUBLIC_APP_URL || "https://aaryvo.ppdesigntech.com").replace(/\/$/, "");
 }
 
@@ -92,7 +92,7 @@ export function shopifyAuthorizationUrl(params: {
   const query = new URLSearchParams({
     client_id: apiKey(),
     scope: scopes().join(","),
-    redirect_uri: `${appUrl()}/api/integrations/shopify/callback`,
+    redirect_uri: `${shopifyAppUrl()}/api/integrations/shopify/callback`,
     state,
   });
   return `https://${shop}/admin/oauth/authorize?${query.toString()}`;
@@ -149,24 +149,56 @@ export async function saveShopifyConnection(params: {
   accessToken: string;
   scope: string;
 }) {
-  return prisma.shopifyStore.upsert({
-    where: { businessId: params.businessId },
-    create: {
-      businessId: params.businessId,
-      shopDomain: params.shop,
-      accessTokenEncrypted: encryptToken(params.accessToken),
-      scope: params.scope,
-      status: "CONNECTED",
-      connectedAt: new Date(),
-    },
-    update: {
-      shopDomain: params.shop,
-      accessTokenEncrypted: encryptToken(params.accessToken),
-      scope: params.scope,
-      status: "CONNECTED",
-      connectedAt: new Date(),
-      lastSyncError: null,
-    },
+  const encryptedToken = encryptToken(params.accessToken);
+  const connectedAt = new Date();
+
+  return prisma.$transaction(async (tx) => {
+    const [storeForBusiness, storeForDomain] = await Promise.all([
+      tx.shopifyStore.findUnique({ where: { businessId: params.businessId } }),
+      tx.shopifyStore.findUnique({ where: { shopDomain: params.shop } }),
+    ]);
+
+    // Completing Shopify OAuth proves control of this store. If the same store
+    // was previously linked to another AARYVO workspace (for example during
+    // testing/re-onboarding), safely transfer that connection to the workspace
+    // that just completed OAuth instead of failing the unique shop-domain key.
+    if (storeForDomain && storeForDomain.businessId !== params.businessId) {
+      if (storeForBusiness && storeForBusiness.id !== storeForDomain.id) {
+        await tx.shopifyStore.delete({ where: { id: storeForBusiness.id } });
+      }
+
+      return tx.shopifyStore.update({
+        where: { id: storeForDomain.id },
+        data: {
+          businessId: params.businessId,
+          accessTokenEncrypted: encryptedToken,
+          scope: params.scope,
+          status: "CONNECTED",
+          connectedAt,
+          lastSyncError: null,
+        },
+      });
+    }
+
+    return tx.shopifyStore.upsert({
+      where: { businessId: params.businessId },
+      create: {
+        businessId: params.businessId,
+        shopDomain: params.shop,
+        accessTokenEncrypted: encryptedToken,
+        scope: params.scope,
+        status: "CONNECTED",
+        connectedAt,
+      },
+      update: {
+        shopDomain: params.shop,
+        accessTokenEncrypted: encryptedToken,
+        scope: params.scope,
+        status: "CONNECTED",
+        connectedAt,
+        lastSyncError: null,
+      },
+    });
   });
 }
 
