@@ -146,6 +146,33 @@ export type ShopifyCatalogOverview = {
   maxPrice: number | null;
 };
 
+type ShopifyProductSearchRow = {
+  id: string;
+  shopifyProductId: string;
+  title: string;
+  handle: string | null;
+  description: string | null;
+  vendor: string | null;
+  productType: string | null;
+  status: string | null;
+  tags: string | null;
+  featuredImageUrl: string | null;
+  onlineStoreUrl: string | null;
+  minPrice: number | null;
+  maxPrice: number | null;
+  currencyCode: string | null;
+  syncedAt: Date;
+  variants: Array<{
+    id: string;
+    title: string;
+    price: number | null;
+    compareAtPrice: number | null;
+    availableForSale: boolean;
+    inventoryQuantity: number | null;
+    optionSummary: string | null;
+  }>;
+};
+
 async function connectedStore(businessId: string) {
   return prisma.shopifyStore.findUnique({
     where: { businessId },
@@ -260,21 +287,19 @@ export async function searchShopifyCatalog(
     },
   };
 
-  const rows = new Map<string, Awaited<ReturnType<typeof prisma.shopifyProduct.findMany>>[number]>();
+  const rows = new Map<string, ShopifyProductSearchRow>();
 
-  async function addRows(
-    found: Awaited<ReturnType<typeof prisma.shopifyProduct.findMany>>,
-  ) {
+  function addRows(found: ShopifyProductSearchRow[]) {
     for (const product of found) rows.set(product.id, product);
   }
 
   if (!terms.length && broadDiscovery) {
-    await addRows(await prisma.shopifyProduct.findMany({
+    addRows(await prisma.shopifyProduct.findMany({
       where: { storeId: store.id, status: "ACTIVE" },
       include: includeVariants,
       orderBy: { syncedAt: "desc" },
       take: 100,
-    }));
+    }) as ShopifyProductSearchRow[]);
   } else {
     // First search the strongest structured commerce fields. This keeps queries
     // such as "rings", "bangles" or "skincare" reliable even if rich knowledge
@@ -287,7 +312,7 @@ export async function searchShopifyCatalog(
     ]);
 
     if (primaryOr.length) {
-      await addRows(await prisma.shopifyProduct.findMany({
+      addRows(await prisma.shopifyProduct.findMany({
         where: {
           storeId: store.id,
           status: "ACTIVE",
@@ -295,13 +320,13 @@ export async function searchShopifyCatalog(
         },
         include: includeVariants,
         take: 120,
-      }));
+      }) as ShopifyProductSearchRow[]);
     }
 
     // Search descriptions separately so a very broad description match cannot
     // crowd out exact title/product-type matches before ranking.
     if (rows.size < 80 && terms.length) {
-      await addRows(await prisma.shopifyProduct.findMany({
+      addRows(await prisma.shopifyProduct.findMany({
         where: {
           storeId: store.id,
           status: "ACTIVE",
@@ -309,12 +334,12 @@ export async function searchShopifyCatalog(
         },
         include: includeVariants,
         take: 80,
-      }));
+      }) as ShopifyProductSearchRow[]);
     }
 
     const knowledgeIds = [...knowledgeByShopifyId.keys()];
     if (knowledgeIds.length) {
-      await addRows(await prisma.shopifyProduct.findMany({
+      addRows(await prisma.shopifyProduct.findMany({
         where: {
           storeId: store.id,
           status: "ACTIVE",
@@ -322,7 +347,7 @@ export async function searchShopifyCatalog(
         },
         include: includeVariants,
         take: 100,
-      }));
+      }) as ShopifyProductSearchRow[]);
     }
   }
 
