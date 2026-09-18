@@ -1,14 +1,11 @@
-import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin";
-import { crawlWebsite } from "@/lib/website-ingestion";
 import { readOutreachRows } from "@/lib/platform-google-sheets";
+import { buildOutreachEmail } from "@/lib/outreach-email";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.OPENAI_MODEL || "gpt-5.6-luna";
 
 function clean(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
@@ -21,19 +18,6 @@ function parseEmail(value: string) {
       .map((v) => v.trim())
       .find((v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) || ""
   );
-}
-
-function parseJsonObject(value: string) {
-  const cleaned = value.replace(/\`\`\`json/gi, "").replace(/\`\`\`/g, "").trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start === -1 || end === -1) throw new Error("No JSON object found");
-  return JSON.parse(cleaned.slice(start, end + 1)) as {
-    subject?: string;
-    html?: string;
-    text?: string;
-    observation?: string;
-  };
 }
 
 export async function GET() {
@@ -82,44 +66,7 @@ export async function GET() {
       });
     }
 
-    const pages = await crawlWebsite(lead.website);
-    const websiteContext = pages
-      .slice(0, 4)
-      .map((p) => `PAGE: ${p.title}\nURL: ${p.url}\n${p.content.slice(0, 7000)}`)
-      .join("\n\n---\n\n")
-      .slice(0, 22000);
-
-    const response = await client.responses.create({
-      model: MODEL,
-      instructions: `You write concise founder-to-business cold outreach for Aaryvo, an AI website sales/support agent.
-
-Return ONLY valid JSON with keys: subject, html, text, observation.
-
-Rules:
-- Always spell the product Aaryvo.
-- Use ONLY facts explicitly present in WEBSITE CONTEXT or LEAD DATA. Never invent details.
-- Mention one concrete website observation in a natural way.
-- Tie that observation to the provided Aaryvo use case.
-- Keep the email concise: roughly 90-150 words.
-- Tone: premium, professional, human, not hypey.
-- Do not claim guaranteed results, savings, conversion lifts, or customer counts.
-- Do not mention scraping, automation, lead scoring, or that AI wrote the email.
-- CTA should invite them to see Aaryvo at https://aaryvo.ppdesigntech.com/ or reply if they want a quick demo.
-- Include a short opt-out line: "If this isn't relevant, just reply no thanks and I won't follow up."
-- HTML must be email-safe inline HTML only: paragraphs and simple links only.
-- observation should be a short factual phrase used in the email.`,
-      input: `LEAD DATA
-Company: ${lead.company}
-Industry: ${lead.industry}
-Location: ${lead.location}
-Existing chat/support: ${lead.existingChat}
-Aaryvo use case: ${lead.useCase}
-
-WEBSITE CONTEXT
-${websiteContext}`,
-    });
-
-    const draft = parseJsonObject(response.output_text || "{}");
+    const draft = await buildOutreachEmail(lead);
 
     return NextResponse.json({
       ok: true,
@@ -133,10 +80,10 @@ ${websiteContext}`,
         score: lead.score,
       },
       draft: {
-        subject: clean(draft.subject),
-        observation: clean(draft.observation),
-        text: clean(draft.text),
-        html: clean(draft.html),
+        subject: draft.subject,
+        observation: draft.observation,
+        text: draft.text,
+        html: draft.html,
       },
     });
   } catch (error) {
