@@ -19,7 +19,7 @@ export const FEATURE_MIN_PLAN = {
   customWidgetBranding: "GROWTH",
   advancedWidgetControls: "GROWTH",
   customSmtp: "GROWTH",
-  richAiActions: "GROWTH",
+  richAiActions: "STARTER",
   prioritySupport: "GROWTH",
   premiumSupport: "PRO",
   earlyAccess: "PRO",
