@@ -285,7 +285,7 @@ export async function searchShopifyCatalog(
       product.variants.map((variant) => variant.optionSummary || variant.title).join(" "),
     ].join(" "));
 
-    return terms.some((term) => structured.includes(term));
+    return terms.some((term) => containsTerm(structured, term));
   });
 
   // Load rich Shopify knowledge only for plausible candidates. Exact source
