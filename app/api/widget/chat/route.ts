@@ -239,6 +239,10 @@ export async function POST(request: Request) {
     await prisma.message.create({ data: { conversationId: conversation.id, role: "user", content: message } });
     const newest = await prisma.message.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "desc" }, take: 20 });
     const recentMessages = newest.reverse();
+    const previousUserMessages = recentMessages
+      .filter((item) => item.role !== "assistant")
+      .map((item) => item.content)
+      .slice(0, -1);
     const knowledge = buildKnowledgeContext(websiteKnowledgeItems);
     const qualification = hasFeature(agent.business.plan, "leadQualification");
     const richEnabled = hasFeature(agent.business.plan, "richAiActions");
@@ -246,11 +250,6 @@ export async function POST(request: Request) {
     let commerceSearchQuery = message;
 
     if (shopifyEnabled && shopifyConnected) {
-      const previousUserMessages = recentMessages
-        .filter((item) => item.role !== "assistant")
-        .map((item) => item.content)
-        .slice(0, -1);
-
       if (isLikelyShopifyRefinement(message) && previousUserMessages.length) {
         commerceSearchQuery = [...previousUserMessages.slice(-3), message].join(" ");
       }
@@ -331,9 +330,15 @@ export async function POST(request: Request) {
       }
     }
 
-    const commerceChipValues = shopifyProducts.length
-      ? [...new Set(shopifyProducts.map((product) => product.productType).filter(Boolean) as string[])].slice(0, 5)
-      : (shopifyOverview?.productTypes || []).slice(0, 5);
+    const shouldShowCommerceChips =
+      simpleGreeting ||
+      /\b(what.*sell|what.*product|catalog|catalogue|collection|collections|browse|explore|categories|category)\b/i.test(message);
+
+    const commerceChipValues = shouldShowCommerceChips
+      ? (shopifyProducts.length
+          ? [...new Set(shopifyProducts.map((product) => product.productType).filter(Boolean) as string[])].slice(0, 5)
+          : (shopifyOverview?.productTypes || []).slice(0, 5))
+      : [];
 
     const commerceUi: RichUi | null =
       richEnabled && shopifyOverview && commerceChipValues.length
@@ -346,9 +351,25 @@ export async function POST(request: Request) {
           }
         : null;
 
-    const resolvedUi = richEnabled ? (parsed.ui || commerceUi) : null;
+    const resolvedUi = richEnabled ? (shouldShowCommerceChips ? (parsed.ui || commerceUi) : parsed.ui) : null;
 
     let reply = parsed.reply;
+
+    const requestedCountMatch = message.match(/\b(?:recommend|show|give|suggest)?\s*(?:me\s*)?(\d{1,2})\b/i);
+    const requestedCount = requestedCountMatch?.[1]
+      ? Math.max(1, Math.min(12, Number(requestedCountMatch[1])))
+      : null;
+
+    const hasFlexiblePreference = /\b(any budget|no budget|any style|no preference|anything|any color|any colour|any size|yes|yeah|yep|sure|go ahead)\b/i.test(message);
+
+    if (shopifyProducts.length > 0 && (requestedCount || hasFlexiblePreference)) {
+      const count = Math.min(requestedCount || 4, shopifyProducts.length);
+      const type = shopifyProducts.find((product) => product.productType)?.productType;
+      reply = type
+        ? `Here are ${count} ${type} option${count === 1 ? "" : "s"} from the live catalogue. I’ve shown the best matches below.`
+        : `Here are ${count} matching product${count === 1 ? "" : "s"} from the live catalogue. I’ve shown the best matches below.`;
+    }
+
     const misleadingNoProductReply =
       shopifyProducts.length > 0 &&
       /(?:don.?t have|do not have|aren.?t available|are not available|no specific|no individual|unable to display|can.?t display|cannot display).{0,80}(?:listing|product|item|detail|recommend)/i.test(reply);
@@ -384,7 +405,7 @@ export async function POST(request: Request) {
       businessName: agent.business.name,
       reply,
       ui: resolvedUi,
-      products: shopifyProducts.slice(0, 4).map((product) => ({
+      products: shopifyProducts.slice(0, Math.min(requestedCount || 4, 8)).map((product) => ({
         id: product.id,
         title: product.title,
         description: product.description,
