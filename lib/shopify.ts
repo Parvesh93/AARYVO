@@ -202,30 +202,68 @@ export async function saveShopifyConnection(params: {
   });
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function graphql<T>(shop: string, token: string, query: string, variables: Record<string, unknown>) {
-  const response = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Shopify-Access-Token": token,
-    },
-    body: JSON.stringify({ query, variables }),
-    cache: "no-store",
-  });
+  let lastError = "Shopify API request failed.";
 
-  const payload = (await response.json()) as {
-    data?: T;
-    errors?: Array<{ message?: string }>;
-  };
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": token,
+      },
+      body: JSON.stringify({ query, variables }),
+      cache: "no-store",
+    });
 
-  if (!response.ok || payload.errors?.length || !payload.data) {
-    throw new Error(
+    const payload = (await response.json()) as {
+      data?: T;
+      errors?: Array<{ message?: string; extensions?: { code?: string } }>;
+      extensions?: {
+        cost?: {
+          throttleStatus?: {
+            currentlyAvailable?: number;
+            restoreRate?: number;
+          };
+        };
+      };
+    };
+
+    const throttled =
+      response.status === 429 ||
+      payload.errors?.some(
+        (error) =>
+          error.extensions?.code === "THROTTLED" ||
+          /throttled/i.test(error.message || ""),
+      );
+
+    if (!throttled && response.ok && !payload.errors?.length && payload.data) {
+      return payload.data;
+    }
+
+    lastError =
       payload.errors?.map((error) => error.message).filter(Boolean).join("; ") ||
-        `Shopify API request failed (${response.status}).`,
+      `Shopify API request failed (${response.status}).`;
+
+    if (!throttled || attempt === 4) break;
+
+    const restoreRate =
+      payload.extensions?.cost?.throttleStatus?.restoreRate || 50;
+    const currentlyAvailable =
+      payload.extensions?.cost?.throttleStatus?.currentlyAvailable || 0;
+
+    const adaptiveWait = Math.max(
+      900,
+      Math.min(5000, Math.ceil(((100 - currentlyAvailable) / restoreRate) * 1000)),
     );
+    await sleep(adaptiveWait * (attempt + 1));
   }
 
-  return payload.data;
+  throw new Error(lastError);
 }
 
 type ProductNode = {
@@ -450,7 +488,7 @@ export async function syncShopifyCatalog(businessId: string) {
     do {
       const remaining = limit - synced;
       if (remaining <= 0) break;
-      const first = Math.min(10, remaining);
+      const first = Math.min(5, remaining);
       const data: ProductsResponse = await graphql<ProductsResponse>(
         store.shopDomain,
         token,
@@ -567,6 +605,7 @@ export async function syncShopifyCatalog(businessId: string) {
       }
 
       cursor = data.products.pageInfo.endCursor;
+      await sleep(250);
       if (!data.products.pageInfo.hasNextPage) cursor = null;
     } while (cursor && synced < limit);
 
