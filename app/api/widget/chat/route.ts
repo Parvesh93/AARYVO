@@ -139,6 +139,38 @@ function replySignalsHandoff(reply: string) {
   return /\b(human follow-up|team can follow|someone from|speak with|contact you|don.t have that information|not available in my|unable to confirm)\b/i.test(reply);
 }
 
+function fallbackCommerceReply(params: {
+  message: string;
+  products: Array<{ title: string; productType: string | null }>;
+  productTypes: string[];
+}) {
+  const lower = params.message.toLowerCase();
+
+  if (params.products.length) {
+    const count = Math.min(params.products.length, 4);
+    const type = params.products.find((product) => product.productType)?.productType;
+    return type
+      ? `I found ${count} ${type} option${count === 1 ? "" : "s"} that match what you’re looking for. I’ve shown the best matches below.`
+      : `I found ${count} matching product${count === 1 ? "" : "s"}. I’ve shown the best options below.`;
+  }
+
+  if (/^(hi|hello|hey|hii|hiii)\b/i.test(params.message.trim())) {
+    const categories = params.productTypes.slice(0, 4);
+    return categories.length
+      ? `Hi! I can help you find products across ${categories.join(", ")} and more. What are you looking for today?`
+      : "Hi! I can help you explore products, compare options and find the right item. What are you looking for today?";
+  }
+
+  if (/\b(what.*sell|what.*product|catalog|catalogue|collection|collections)\b/i.test(lower)) {
+    const categories = params.productTypes.slice(0, 6);
+    return categories.length
+      ? `We carry products across ${categories.join(", ")} and more. Choose a category below or tell me what you want.`
+      : "I can help you explore the store catalogue. Tell me what kind of product you’re looking for.";
+  }
+
+  return "I couldn’t find an exact match yet. Try a product type, colour, size, occasion, material or budget and I’ll search the catalogue again.";
+}
+
 export async function POST(request: Request) {
   const headers = corsHeadersFor(request);
   try {
@@ -219,12 +251,40 @@ export async function POST(request: Request) {
       ? `\n\nRICH RESPONSE FORMAT:\nReturn ONLY one JSON object {"reply":"Your reply","ui":null}. ui may be chips, buttons or cards using only approved knowledge. Maximum 6 options or 4 cards. No HTML or code fences.`
       : "\n\nRESPONSE FORMAT:\nReply with plain conversational text only. Do not output JSON or interactive UI.";
 
-    const response = await client.responses.create({
-      model: MODEL,
-      instructions: `${base}${format}${shopifyOverviewContext ? `\n\nSHOPIFY CATALOGUE OVERVIEW:\n${shopifyOverviewContext}` : ""}${shopifyContext ? `\n\nLIVE SHOPIFY CATALOGUE RESULTS:\n${shopifyContext}` : ""}\n\nAPPROVED WEBSITE KNOWLEDGE:\n${knowledge || "No website knowledge available."}`,
-      input: recentMessages.map((i) => ({ role: i.role === "assistant" ? "assistant" as const : "user" as const, content: i.content })),
-    });
-    const parsed = richEnabled ? parseRichResponse(response.output_text || "") : { reply: (response.output_text || "").trim().slice(0, 4000) || "I’m unable to answer that right now. Would you like a human follow-up?", ui: null };
+    let parsed: { reply: string; ui: RichUi | null };
+
+    try {
+      const response = await client.responses.create({
+        model: MODEL,
+        instructions: `${base}${format}${shopifyOverviewContext ? `\n\nSHOPIFY CATALOGUE OVERVIEW:\n${shopifyOverviewContext}` : ""}${shopifyContext ? `\n\nLIVE SHOPIFY CATALOGUE RESULTS:\n${shopifyContext}` : ""}\n\nAPPROVED WEBSITE KNOWLEDGE:\n${knowledge || "No website knowledge available."}`,
+        input: recentMessages.map((i) => ({ role: i.role === "assistant" ? "assistant" as const : "user" as const, content: i.content })),
+      });
+
+      parsed = richEnabled
+        ? parseRichResponse(response.output_text || "")
+        : {
+            reply: (response.output_text || "").trim().slice(0, 4000) || "How can I help you today?",
+            ui: null,
+          };
+    } catch (error) {
+      console.error("AARYVO primary AI response error", error);
+
+      // Commerce chat should never collapse just because the model provider has
+      // a transient error. We already have trusted Shopify results locally, so
+      // return a useful deterministic response and product cards/chips instead.
+      if (shopifyOverview) {
+        parsed = {
+          reply: fallbackCommerceReply({
+            message,
+            products: shopifyProducts,
+            productTypes: shopifyOverview.productTypes,
+          }),
+          ui: null,
+        };
+      } else {
+        throw error;
+      }
+    }
 
     const commerceChipValues = shopifyProducts.length
       ? [...new Set(shopifyProducts.map((product) => product.productType).filter(Boolean) as string[])].slice(0, 5)
