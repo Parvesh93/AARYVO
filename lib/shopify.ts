@@ -239,7 +239,22 @@ type ProductNode = {
   tags: string[];
   onlineStoreUrl: string | null;
   updatedAt: string;
-  featuredImage: { url: string } | null;
+  featuredImage: { url: string; altText?: string | null } | null;
+  seo: { title: string | null; description: string | null };
+  category: { name: string; fullName: string } | null;
+  options: Array<{ name: string; values: string[] }>;
+  collections: {
+    nodes: Array<{ id: string; title: string; handle: string; description: string }>;
+  };
+  metafields: {
+    nodes: Array<{ namespace: string; key: string; type: string; value: string }>;
+  };
+  media: {
+    nodes: Array<{
+      alt: string | null;
+      image?: { url: string; altText?: string | null } | null;
+    }>;
+  };
   priceRangeV2: {
     minVariantPrice: { amount: string; currencyCode: string };
     maxVariantPrice: { amount: string; currencyCode: string };
@@ -280,12 +295,29 @@ const PRODUCTS_QUERY = `
         tags
         onlineStoreUrl
         updatedAt
-        featuredImage { url }
+        featuredImage { url altText }
+        seo { title description }
+        category { name fullName }
+        options { name values }
+        collections(first: 20) {
+          nodes { id title handle description }
+        }
+        metafields(first: 30) {
+          nodes { namespace key type value }
+        }
+        media(first: 8, query: "media_type:IMAGE", sortKey: POSITION) {
+          nodes {
+            alt
+            ... on MediaImage {
+              image { url altText }
+            }
+          }
+        }
         priceRangeV2 {
           minVariantPrice { amount currencyCode }
           maxVariantPrice { amount currencyCode }
         }
-        variants(first: 100) {
+        variants(first: 60) {
           nodes {
             id
             title
@@ -303,6 +335,77 @@ const PRODUCTS_QUERY = `
     }
   }
 `;
+
+function clip(value: string | null | undefined, max = 1400) {
+  return (value || "").replace(/\s+/g, " ").trim().slice(0, max);
+}
+
+function buildShopifyProductKnowledge(product: ProductNode) {
+  const collections = product.collections.nodes
+    .map((item) => [item.title, item.handle ? `[${item.handle}]` : null, clip(item.description, 300) || null].filter(Boolean).join(" · "))
+    .join("; ");
+
+  const metafields = product.metafields.nodes
+    .map((item) => `${item.namespace}.${item.key} (${item.type}): ${clip(item.value, 700)}`)
+    .join("; ");
+
+  const options = product.options
+    .map((option) => `${option.name}: ${option.values.join(", ")}`)
+    .join("; ");
+
+  const variants = product.variants.nodes
+    .map((variant) => {
+      const selected = variant.selectedOptions.map((option) => `${option.name}: ${option.value}`).join(", ");
+      return [
+        variant.title,
+        selected || null,
+        variant.sku ? `SKU ${variant.sku}` : null,
+        `price ${variant.price}`,
+        variant.compareAtPrice ? `compare-at ${variant.compareAtPrice}` : null,
+        variant.availableForSale ? "available" : "sold out",
+        variant.inventoryQuantity == null ? null : `inventory ${variant.inventoryQuantity}`,
+      ].filter(Boolean).join(" | ");
+    })
+    .join("; ");
+
+  const images = product.media.nodes
+    .map((item) => {
+      const url = item.image?.url || "";
+      const alt = item.image?.altText || item.alt || "";
+      return [alt ? `alt: ${clip(alt, 180)}` : null, url || null].filter(Boolean).join(" | ");
+    })
+    .filter(Boolean)
+    .join("; ");
+
+  const price = product.priceRangeV2.minVariantPrice.amount === product.priceRangeV2.maxVariantPrice.amount
+    ? `${product.priceRangeV2.minVariantPrice.currencyCode} ${product.priceRangeV2.minVariantPrice.amount}`
+    : `${product.priceRangeV2.minVariantPrice.currencyCode} ${product.priceRangeV2.minVariantPrice.amount}-${product.priceRangeV2.maxVariantPrice.amount}`;
+
+  return [
+    "SOURCE: Shopify product catalogue",
+    `SHOPIFY_PRODUCT_ID: ${product.id}`,
+    `TITLE: ${product.title}`,
+    `STATUS: ${product.status}`,
+    `VENDOR: ${product.vendor || "N/A"}`,
+    `PRODUCT TYPE: ${product.productType || "N/A"}`,
+    `CATEGORY: ${product.category?.fullName || product.category?.name || "N/A"}`,
+    `PRICE: ${price}`,
+    `TAGS: ${product.tags.length ? product.tags.join(", ") : "N/A"}`,
+    `COLLECTIONS: ${collections || "N/A"}`,
+    `OPTIONS: ${options || "N/A"}`,
+    `DESCRIPTION: ${clip(product.description, 3500) || "N/A"}`,
+    `SEO TITLE: ${clip(product.seo?.title, 500) || "N/A"}`,
+    `SEO DESCRIPTION: ${clip(product.seo?.description, 1000) || "N/A"}`,
+    `METAFIELDS: ${metafields || "N/A"}`,
+    `VARIANTS: ${variants || "N/A"}`,
+    `IMAGES: ${images || product.featuredImage?.url || "N/A"}`,
+    `ONLINE STORE URL: ${product.onlineStoreUrl || "N/A"}`,
+  ].join("\n").slice(0, 24000);
+}
+
+function shopifyKnowledgeSource(productId: string) {
+  return `shopify://product/${encodeURIComponent(productId)}`;
+}
 
 export function shopifyProductLimit(plan: string | null | undefined) {
   const normalized = normalizePlan(plan);
@@ -328,6 +431,13 @@ export async function syncShopifyCatalog(businessId: string) {
 
   const store = business.shopifyStore;
   const token = decryptToken(store.accessTokenEncrypted);
+  const agents = await prisma.agent.findMany({
+    where: { businessId },
+    select: { id: true },
+  });
+  const agentIds = agents.map((agent) => agent.id);
+  const collectionNames = new Set<string>();
+  const categoryNames = new Set<string>();
   let cursor: string | null = null;
   let synced = 0;
 
@@ -340,7 +450,7 @@ export async function syncShopifyCatalog(businessId: string) {
     do {
       const remaining = limit - synced;
       if (remaining <= 0) break;
-      const first = Math.min(50, remaining);
+      const first = Math.min(10, remaining);
       const data: ProductsResponse = await graphql<ProductsResponse>(
         store.shopDomain,
         token,
@@ -431,6 +541,27 @@ export async function syncShopifyCatalog(businessId: string) {
           });
         }
 
+        for (const collection of product.collections.nodes) {
+          if (collection.title?.trim()) collectionNames.add(collection.title.trim());
+        }
+        const category = product.category?.fullName || product.category?.name;
+        if (category?.trim()) categoryNames.add(category.trim());
+
+        if (agentIds.length) {
+          const source = shopifyKnowledgeSource(product.id);
+          await prisma.knowledgeItem.deleteMany({
+            where: { agentId: { in: agentIds }, source },
+          });
+          await prisma.knowledgeItem.createMany({
+            data: agentIds.map((agentId) => ({
+              agentId,
+              source,
+              title: product.title,
+              content: buildShopifyProductKnowledge(product),
+            })),
+          });
+        }
+
         synced++;
         if (synced >= limit) break;
       }
@@ -438,6 +569,25 @@ export async function syncShopifyCatalog(businessId: string) {
       cursor = data.products.pageInfo.endCursor;
       if (!data.products.pageInfo.hasNextPage) cursor = null;
     } while (cursor && synced < limit);
+
+    if (agentIds.length) {
+      const summarySource = "shopify://catalog-summary";
+      await prisma.knowledgeItem.deleteMany({
+        where: { agentId: { in: agentIds }, source: summarySource },
+      });
+      await prisma.knowledgeItem.createMany({
+        data: agentIds.map((agentId) => ({
+          agentId,
+          source: summarySource,
+          title: "Shopify catalogue summary",
+          content: [
+            `SYNCED PRODUCTS: ${synced}`,
+            `COLLECTIONS: ${[...collectionNames].slice(0, 120).join(", ") || "N/A"}`,
+            `CATEGORIES: ${[...categoryNames].slice(0, 120).join(", ") || "N/A"}`,
+          ].join("\n"),
+        })),
+      });
+    }
 
     await prisma.shopifyStore.update({
       where: { id: store.id },
