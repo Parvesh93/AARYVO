@@ -19,6 +19,12 @@ function normalize(value: string) {
     .trim();
 }
 
+function containsTerm(text: string, term: string) {
+  const haystack = ` ${normalize(text)} `;
+  const needle = normalize(term);
+  return Boolean(needle) && haystack.includes(` ${needle} `);
+}
+
 const TERM_SYNONYMS: Record<string, string[]> = {
   jewellery: ["jewelry"],
   jewelry: ["jewellery"],
@@ -324,15 +330,15 @@ export async function searchShopifyCatalog(
     let score = terms.length ? 0 : 1;
 
     for (const term of terms) {
-      if (title === term) score += 16;
-      else if (title.includes(term)) score += 10;
-      if (type === term) score += 14;
-      else if (type.includes(term)) score += 8;
-      if (tags.includes(term)) score += 6;
-      if (variantText.includes(term)) score += 5;
-      if (knowledgeText.includes(term)) score += 5;
-      if (vendor.includes(term)) score += 3;
-      if (description.includes(term)) score += 2;
+      if (title === normalize(term)) score += 16;
+      else if (containsTerm(title, term)) score += 10;
+      if (type === normalize(term)) score += 14;
+      else if (containsTerm(type, term)) score += 8;
+      if (containsTerm(tags, term)) score += 6;
+      if (containsTerm(variantText, term)) score += 5;
+      if (containsTerm(knowledgeText, term)) score += 5;
+      if (containsTerm(vendor, term)) score += 3;
+      if (containsTerm(description, term)) score += 2;
     }
 
     if (product.variants.some((variant) => variant.availableForSale)) score += 2;
