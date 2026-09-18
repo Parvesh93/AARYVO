@@ -31,7 +31,16 @@ export default async function OutreachReviewPage() {
       <div className="mt-8">
         <OutreachReviewClient
           initialPreviews={previews.map((p) => ({
-            ...p,
+            id: p.id,
+            company: p.company,
+            website: p.website,
+            recipient: p.recipient,
+            emailType: p.emailType,
+            followUpNumber: p.followUpNumber,
+            subject: p.subject,
+            htmlBody: p.htmlBody,
+            textBody: p.textBody,
+            observation: p.observation,
             createdAt: p.createdAt.toISOString(),
           }))}
           defaultLimit={defaultLimit}
