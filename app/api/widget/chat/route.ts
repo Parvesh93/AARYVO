@@ -139,6 +139,14 @@ function replySignalsHandoff(reply: string) {
   return /\b(human follow-up|team can follow|someone from|speak with|contact you|don.t have that information|not available in my|unable to confirm)\b/i.test(reply);
 }
 
+function isFlexibleCommerceReply(message: string) {
+  return /\b(any budget|no budget|budget flexible|no preference|anything|any color|any colour|any size|any style|any occasion|any material|any type|yes|yeah|yep|sure|ok|okay|go ahead)\b/i.test(message);
+}
+
+function isBroadCommerceRequest(message: string) {
+  return /\b(what.*sell|what.*product|catalog|catalogue|collection|collections|browse|explore|categories|category|recommend|suggest|show.*product)\b/i.test(message);
+}
+
 function fallbackCommerceReply(params: {
   message: string;
   products: Array<{ title: string; productType: string | null }>;
@@ -195,13 +203,13 @@ export async function POST(request: Request) {
 
     let websiteKnowledgeItems: Array<{ title: string | null; source: string; content: string }> = [];
     try {
-      websiteKnowledgeItems = await prisma.knowledgeItem.findMany({
-        where: {
-          agentId: agent.id,
-          NOT: { source: { startsWith: "shopify://" } },
-        },
+      const allKnowledgeItems = await prisma.knowledgeItem.findMany({
+        where: { agentId: agent.id },
         orderBy: { createdAt: "asc" },
       });
+      websiteKnowledgeItems = allKnowledgeItems.filter(
+        (item) => !item.source.startsWith("shopify://"),
+      );
     } catch (error) {
       console.error("AARYVO website knowledge read error", error);
     }
@@ -229,10 +237,6 @@ export async function POST(request: Request) {
       }
     }
 
-    if (!websiteKnowledgeItems.length && !shopifyConnected) {
-      return NextResponse.json({ error: "This agent is not ready yet." }, { status: 400, headers });
-    }
-
     const conversation = await prisma.conversation.findFirst({ where: { id: conversationId, agentId: agent.id, visitorId }, include: { lead: true } });
     if (!conversation?.lead?.name || (!conversation.lead.phone && !conversation.lead.email)) return NextResponse.json({ error: "Please complete the contact form before chatting." }, { status: 403, headers });
 
@@ -251,7 +255,10 @@ export async function POST(request: Request) {
 
     if (shopifyEnabled && shopifyConnected) {
       if (isLikelyShopifyRefinement(message) && previousUserMessages.length) {
-        commerceSearchQuery = [...previousUserMessages.slice(-3), message].join(" ");
+        const baseIntent = [...previousUserMessages]
+          .reverse()
+          .find((item) => !isFlexibleCommerceReply(item));
+        commerceSearchQuery = baseIntent ? `${baseIntent} ${message}` : message;
       }
 
       if (isShopifyCommerceQuery(commerceSearchQuery)) {
@@ -288,7 +295,26 @@ export async function POST(request: Request) {
 
     const simpleGreeting = /^(hi|hello|hey|hii|hiii|good morning|good afternoon|good evening)[!. ]*$/i.test(message.trim());
 
-    if (shopifyConnected && simpleGreeting) {
+    const requestedCountMatch = message.match(/\b(?:recommend|show|give|suggest)?\s*(?:me\s*)?(\d{1,2})\b/i);
+    const requestedCount = requestedCountMatch?.[1]
+      ? Math.max(1, Math.min(8, Number(requestedCountMatch[1])))
+      : null;
+
+    const directCommerceResponse =
+      shopifyConnected &&
+      shopifyProducts.length > 0 &&
+      !simpleGreeting;
+
+    if (directCommerceResponse) {
+      const count = Math.min(requestedCount || 4, shopifyProducts.length);
+      const type = shopifyProducts.find((product) => product.productType)?.productType;
+      parsed = {
+        reply: type
+          ? `Here are ${count} ${type} option${count === 1 ? "" : "s"} from the live catalogue. You can open any product below, or tell me a colour, size, material, occasion or price range to refine them.`
+          : `Here are ${count} matching products from the live catalogue. You can open any product below or refine the results by colour, size, material, occasion or price.`,
+        ui: null,
+      };
+    } else if (shopifyConnected && simpleGreeting) {
       parsed = {
         reply: fallbackCommerceReply({
           message,
@@ -330,9 +356,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const shouldShowCommerceChips =
-      simpleGreeting ||
-      /\b(what.*sell|what.*product|catalog|catalogue|collection|collections|browse|explore|categories|category)\b/i.test(message);
+    const shouldShowCommerceChips = simpleGreeting || isBroadCommerceRequest(message);
 
     const commerceChipValues = shouldShowCommerceChips
       ? (shopifyProducts.length
@@ -351,16 +375,11 @@ export async function POST(request: Request) {
           }
         : null;
 
-    const resolvedUi = richEnabled ? (shouldShowCommerceChips ? (parsed.ui || commerceUi) : parsed.ui) : null;
+    const resolvedUi = richEnabled ? (shouldShowCommerceChips ? (parsed.ui || commerceUi) : null) : null;
 
     let reply = parsed.reply;
 
-    const requestedCountMatch = message.match(/\b(?:recommend|show|give|suggest)?\s*(?:me\s*)?(\d{1,2})\b/i);
-    const requestedCount = requestedCountMatch?.[1]
-      ? Math.max(1, Math.min(12, Number(requestedCountMatch[1])))
-      : null;
-
-    const hasFlexiblePreference = /\b(any budget|no budget|any style|no preference|anything|any color|any colour|any size|yes|yeah|yep|sure|go ahead)\b/i.test(message);
+    const hasFlexiblePreference = isFlexibleCommerceReply(message);
 
     if (shopifyProducts.length > 0 && (requestedCount || hasFlexiblePreference)) {
       const count = Math.min(requestedCount || 4, shopifyProducts.length);
@@ -385,7 +404,7 @@ export async function POST(request: Request) {
     await prisma.message.create({ data: { conversationId: conversation.id, role: "assistant", content: reply } });
 
     let lead: Awaited<ReturnType<typeof qualifyAndSaveLead>> = conversation.lead;
-    if (qualification) {
+    if (qualification && !shopifyProducts.length) {
       const transcriptNewest = await prisma.message.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "desc" }, take: 20 });
       lead = await qualifyAndSaveLead({ businessId: agent.businessId, conversationId: conversation.id, messages: transcriptNewest.reverse() });
     }
