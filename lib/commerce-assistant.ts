@@ -6,6 +6,18 @@ import {
 
 export type CommerceMessage = { role: string; content: string };
 
+export type CommerceIntent = {
+  category: string | null;
+  recipient: "female" | "male" | "child" | null;
+  age: number | null;
+  occasion: string | null;
+  budgetMax: number | null;
+  style: string | null;
+  colors: string[];
+  sizes: string[];
+  materials: string[];
+};
+
 export type CommerceState = {
   active: boolean;
   searchQuery: string;
@@ -15,6 +27,7 @@ export type CommerceState = {
   flexible: boolean;
   broad: boolean;
   specificProductIntent: boolean;
+  intent: CommerceIntent;
 };
 
 export type CommerceUi = {
@@ -44,6 +57,119 @@ function normalize(value: string) {
     .replace(/[^a-z0-9₹$€£.%\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+const CATEGORY_TERMS = [
+  "ring","rings","earring","earrings","necklace","necklaces","bangle","bangles",
+  "bracelet","bracelets","top","tops","shirt","shirts","dress","dresses","pants",
+  "trousers","skincare","serum","cleanser","cream","moisturizer","moisturiser",
+  "shoe","shoes","bag","bags","jewellery","jewelry",
+];
+
+function extractBudgetMax(value: string) {
+  const normalized = value.replace(/,/g, "");
+  const match = normalized.match(
+    /(?:under|below|less than|up to|upto|max(?:imum)?|budget(?:\s+is)?(?:\s+around)?)[^0-9]{0,12}(?:₹|\$|€|£)?\s*(\d+(?:\.\d+)?)/i,
+  );
+  if (!match?.[1]) return null;
+  const amount = Number(match[1]);
+  return Number.isFinite(amount) && amount > 0 ? amount : null;
+}
+
+function extractAge(value: string) {
+  const patterns = [
+    /\bage\s*(?:is|of)?\s*(\d{1,2})\b/i,
+    /\baged\s*(\d{1,2})\b/i,
+    /\b(\d{1,2})\s*(?:years?|yrs?)\s*old\b/i,
+    /\b(?:female|woman|girl|male|man|boy)\s*(?:of|aged|age)?\s*(\d{1,2})\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = value.match(pattern);
+    const age = match?.[1] ? Number(match[1]) : null;
+    if (age && age >= 1 && age <= 100) return age;
+  }
+  return null;
+}
+
+function extractIntent(
+  userMessages: string[],
+  overview: ShopifyCatalogOverview | null,
+): CommerceIntent {
+  const text = userMessages.join(" ");
+  const normalized = normalize(text);
+
+  let category: string | null = null;
+  const productTypes = overview?.productTypes || [];
+  const matchedType = productTypes.find(
+    (type) => phraseIn(text, type) || phraseIn(type, text),
+  );
+  if (matchedType) {
+    category = matchedType;
+  } else {
+    category =
+      CATEGORY_TERMS.find((term) => phraseIn(normalized, term)) || null;
+  }
+
+  let recipient: CommerceIntent["recipient"] = null;
+  if (/\b(female|woman|women|girl|wife|girlfriend|mother|mom|mum|sister|daughter|her)\b/i.test(text)) {
+    recipient = "female";
+  } else if (/\b(male|man|men|boy|husband|boyfriend|father|dad|brother|son|him)\b/i.test(text)) {
+    recipient = "male";
+  } else if (/\b(child|children|kid|kids|baby|toddler)\b/i.test(text)) {
+    recipient = "child";
+  }
+
+  const occasion =
+    [
+      "diwali","wedding","birthday","anniversary","valentine","rakhi","festival",
+      "festive","party","office","workwear","everyday","daily","gifting","gift",
+    ].find((term) => phraseIn(normalized, term)) || null;
+
+  const style =
+    [
+      "minimal","simple","classic","modern","statement","premium","luxury",
+      "casual","formal","traditional","ethnic","elegant","contemporary",
+    ].find((term) => phraseIn(normalized, term)) || null;
+
+  const colors = [
+    "black","white","red","blue","green","pink","beige","brown","gold","golden",
+    "silver","rose gold","yellow gold","white gold",
+  ].filter((term) => phraseIn(normalized, term));
+
+  const sizes = [
+    "xxs","xs","small","medium","large","xl","xxl","xxxl",
+  ].filter((term) => phraseIn(normalized, term));
+
+  const materials = [
+    "gold","silver","sterling silver","cotton","linen","silk","leather","denim",
+    "brass","stainless steel","diamond","cubic zirconia","zirconia",
+  ].filter((term) => phraseIn(normalized, term));
+
+  return {
+    category,
+    recipient,
+    age: extractAge(text),
+    occasion,
+    budgetMax: extractBudgetMax(text),
+    style,
+    colors: [...new Set(colors)],
+    sizes: [...new Set(sizes)],
+    materials: [...new Set(materials)],
+  };
+}
+
+export function buildCommerceRecommendationQuery(state: CommerceState) {
+  const parts = [
+    state.intent.category,
+    state.intent.style,
+    state.intent.occasion,
+    ...state.intent.colors,
+    ...state.intent.materials,
+    ...state.intent.sizes,
+  ].filter(Boolean) as string[];
+
+  if (!parts.length) return state.searchQuery;
+  return [...new Set(parts)].join(" ");
 }
 
 function phraseIn(text: string, phrase: string) {
@@ -107,7 +233,16 @@ export function hasSpecificCommerceProductIntent(
 export function shouldClarifyCommerceBeforeProducts(state: CommerceState) {
   if (state.flexible || state.requestedCount) return false;
   if (state.specificProductIntent) return false;
-  return state.broad && state.clarificationCount < 3;
+  if (!state.broad || state.clarificationCount >= 3) return false;
+
+  // Broad gifting/discovery flows should feel like a good salesperson:
+  // gather only the missing details that materially improve recommendations,
+  // then show products instead of continuing to interrogate the shopper.
+  if (!state.intent.recipient && state.clarificationCount < 1) return true;
+  if (state.intent.budgetMax === null && state.clarificationCount < 2) return true;
+  if (!state.intent.category && state.clarificationCount < 3) return true;
+
+  return false;
 }
 
 function isBaseCommerceMessage(
@@ -184,6 +319,17 @@ export function deriveCommerceState(params: {
       flexible: false,
       broad: false,
       specificProductIntent: false,
+      intent: {
+        category: null,
+        recipient: null,
+        age: null,
+        occasion: null,
+        budgetMax: null,
+        style: null,
+        colors: [],
+        sizes: [],
+        materials: [],
+      },
     };
   }
 
@@ -209,6 +355,12 @@ export function deriveCommerceState(params: {
           ).length
       : 0;
 
+  const intentMessages = (baseIndex >= 0 ? messages.slice(baseIndex) : messages)
+    .filter((item) => item.role !== "assistant")
+    .map((item) => item.content);
+
+  const intent = extractIntent(intentMessages, overview);
+
   return {
     active: true,
     searchQuery,
@@ -218,8 +370,10 @@ export function deriveCommerceState(params: {
     flexible: currentFlexible,
     broad: BROAD_COMMERCE.test(baseIntent) || BROAD_COMMERCE.test(currentMessage),
     specificProductIntent:
+      Boolean(intent.category) ||
       hasSpecificCommerceProductIntent(baseIntent, overview) ||
       hasSpecificCommerceProductIntent(currentMessage, overview),
+    intent,
   };
 }
 
@@ -297,10 +451,43 @@ export function buildCommerceClarification(params: {
   const { state, overview } = params;
   const query = normalize(state.searchQuery);
 
-  if (state.broad && state.clarificationCount === 0) {
+  if (state.broad && !state.intent.recipient && state.clarificationCount < 1) {
     return {
       reply:
-        "Sure — what kind of gift or product would you like me to focus on? Pick a category, or tell me who it’s for and I’ll narrow it down.",
+        "Who are you shopping for? That will help me narrow the strongest options instead of showing you a random mix.",
+      ui: {
+        type: "chips" as const,
+        options: [
+          { label: "For her", value: "It's for a female" },
+          { label: "For him", value: "It's for a male" },
+          { label: "For a child", value: "It's for a child" },
+          { label: "Anyone", value: "No preference" },
+        ],
+      },
+    };
+  }
+
+  if (
+    state.broad &&
+    state.intent.budgetMax === null &&
+    !state.flexible &&
+    state.clarificationCount < 2
+  ) {
+    return {
+      reply:
+        "Got it. Do you have a budget in mind, or should I choose the best available options across price ranges?",
+      ui: budgetChips(overview),
+    };
+  }
+
+  if (
+    state.broad &&
+    !state.intent.category &&
+    state.clarificationCount < 3
+  ) {
+    return {
+      reply:
+        "One last thing — would you like me to focus on a particular category, or should I choose the best options across the store?",
       ui: categoryChips(overview),
     };
   }
@@ -343,6 +530,7 @@ function extractRefinementValues(products: ShopifyCatalogProduct[], query: strin
 
   for (const product of products) {
     for (const variant of product.variants) {
+      if (!variant.availableForSale) continue;
       const summary = variant.optionSummary || "";
       for (const part of summary.split(/[·|,]/)) {
         const value = part.includes(":")
