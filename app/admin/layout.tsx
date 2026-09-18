@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { Activity, BarChart3, Building2, CircleDollarSign, ExternalLink, Gauge, HeartPulse, Mail, MessageSquareText, Settings, Users } from "lucide-react";
+import { Activity, BarChart3, Building2, CircleDollarSign, ExternalLink, Gauge, HeartPulse, Mail, MessageSquareText, Send, Settings, Users } from "lucide-react";
 import { requireAdmin } from "@/lib/admin";
 
 export const metadata: Metadata = { title: "Admin | AARYVO", robots: { index: false, follow: false } };
@@ -13,6 +13,7 @@ const nav = [
   ["Subscriptions", "/admin/subscriptions", CircleDollarSign],
   ["Usage", "/admin/usage", Activity],
   ["Email Analytics", "/admin/email", Mail],
+  ["Outreach Review", "/admin/outreach", Send],
   ["Conversations & Leads", "/admin/sales", MessageSquareText],
   ["System Health", "/admin/health", HeartPulse],
   ["Activity Logs", "/admin/activity", Users],
