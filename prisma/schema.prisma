@@ -79,6 +79,7 @@ model Business {
   agents Agent[]
   leads Lead[]
   appointments Appointment[]
+  shopifyStore ShopifyStore?
   @@map("business")
 }
 
@@ -195,4 +196,66 @@ model Appointment {
   business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
   lead Lead? @relation(fields:[leadId],references:[id],onDelete:SetNull)
   @@map("appointment")
+}
+
+
+model ShopifyStore {
+  id String @id @default(cuid())
+  businessId String @unique
+  shopDomain String @unique
+  accessTokenEncrypted String @db.Text
+  scope String? @db.Text
+  status String @default("CONNECTED")
+  connectedAt DateTime @default(now())
+  lastSyncAt DateTime?
+  lastSyncStatus String?
+  lastSyncError String? @db.Text
+  business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
+  products ShopifyProduct[]
+  @@map("shopifystore")
+}
+
+model ShopifyProduct {
+  id String @id @default(cuid())
+  storeId String
+  shopifyProductId String
+  title String
+  handle String?
+  description String? @db.LongText
+  vendor String?
+  productType String?
+  status String?
+  tags String? @db.Text
+  featuredImageUrl String? @db.Text
+  onlineStoreUrl String? @db.Text
+  minPrice Float?
+  maxPrice Float?
+  currencyCode String?
+  syncedAt DateTime @default(now())
+  shopifyUpdatedAt DateTime?
+  store ShopifyStore @relation(fields:[storeId],references:[id],onDelete:Cascade)
+  variants ShopifyVariant[]
+  @@unique([storeId,shopifyProductId])
+  @@index([storeId,title])
+  @@index([storeId,productType])
+  @@map("shopifyproduct")
+}
+
+model ShopifyVariant {
+  id String @id @default(cuid())
+  productId String
+  shopifyVariantId String
+  title String
+  sku String?
+  price Float?
+  compareAtPrice Float?
+  availableForSale Boolean @default(false)
+  inventoryQuantity Int?
+  imageUrl String? @db.Text
+  optionSummary String? @db.Text
+  syncedAt DateTime @default(now())
+  product ShopifyProduct @relation(fields:[productId],references:[id],onDelete:Cascade)
+  @@unique([productId,shopifyVariantId])
+  @@index([productId])
+  @@map("shopifyvariant")
 }
