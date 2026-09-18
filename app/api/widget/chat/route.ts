@@ -347,7 +347,20 @@ export async function POST(request: Request) {
         : null;
 
     const resolvedUi = richEnabled ? (parsed.ui || commerceUi) : null;
-    const reply = parsed.reply;
+
+    let reply = parsed.reply;
+    const misleadingNoProductReply =
+      shopifyProducts.length > 0 &&
+      /(?:don.?t have|do not have|aren.?t available|are not available|no specific|no individual|unable to display|can.?t display|cannot display).{0,80}(?:listing|product|item|detail|recommend)/i.test(reply);
+
+    if (misleadingNoProductReply) {
+      reply = fallbackCommerceReply({
+        message,
+        products: shopifyProducts,
+        productTypes: shopifyOverview?.productTypes || [],
+      });
+    }
+
     await prisma.message.create({ data: { conversationId: conversation.id, role: "assistant", content: reply } });
 
     let lead: Awaited<ReturnType<typeof qualifyAndSaveLead>> = conversation.lead;
