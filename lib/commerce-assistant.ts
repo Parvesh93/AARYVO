@@ -104,9 +104,18 @@ export function deriveCommerceState(params: {
   const { messages, currentMessage, overview } = params;
   const currentFlexible = isFlexibleCommerceAnswer(currentMessage);
   const currentRefinement = isLikelyShopifyRefinement(currentMessage);
+  const currentWords = normalize(currentMessage).split(" ").filter(Boolean);
+  const continuingCommerce =
+    Boolean(params.priorCommerceActive) &&
+    !NON_COMMERCE.test(currentMessage) &&
+    !GREETING.test(currentMessage.trim()) &&
+    currentWords.length > 0 &&
+    currentWords.length <= 10;
 
   let baseIndex = -1;
-  for (let index = messages.length - 1; index >= 0; index--) {
+  const searchFrom = continuingCommerce ? messages.length - 2 : messages.length - 1;
+
+  for (let index = searchFrom; index >= 0; index--) {
     const item = messages[index];
     if (item.role === "assistant") continue;
     if (isBaseCommerceMessage(item.content, overview)) {
@@ -115,10 +124,21 @@ export function deriveCommerceState(params: {
     }
   }
 
+  if (baseIndex < 0 && !continuingCommerce) {
+    for (let index = messages.length - 1; index >= 0; index--) {
+      const item = messages[index];
+      if (item.role === "assistant") continue;
+      if (isBaseCommerceMessage(item.content, overview)) {
+        baseIndex = index;
+        break;
+      }
+    }
+  }
+
   const active =
     looksLikeCommerceIntent(currentMessage, overview) ||
-    ((currentFlexible || currentRefinement) && baseIndex >= 0) ||
-    Boolean(params.priorCommerceActive && (currentFlexible || currentRefinement));
+    continuingCommerce ||
+    ((currentFlexible || currentRefinement) && baseIndex >= 0);
 
   if (!active) {
     return {
