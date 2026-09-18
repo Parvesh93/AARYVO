@@ -11,7 +11,39 @@ const STOP_WORDS = new Set([
 ]);
 
 function normalize(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9₹$€£.%\s-]/g, " ").replace(/\s+/g, " ").trim();
+  return value
+    .toLowerCase()
+    .replace(/[-_/]+/g, " ")
+    .replace(/[^a-z0-9₹$€£.%\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const TERM_SYNONYMS: Record<string, string[]> = {
+  jewellery: ["jewelry"],
+  jewelry: ["jewellery"],
+  bracelet: ["bracelets", "bangle", "bangles"],
+  bracelets: ["bracelet", "bangle", "bangles"],
+  bangle: ["bracelet", "bracelets", "bangles"],
+  bangles: ["bracelet", "bracelets", "bangle"],
+  pants: ["pant", "trouser", "trousers"],
+  pant: ["pants", "trouser", "trousers"],
+  trouser: ["pants", "pant", "trousers"],
+  trousers: ["pants", "pant", "trouser"],
+  skincare: ["skin", "serum", "cleanser", "cream", "moisturizer", "moisturiser"],
+  moisturizer: ["moisturiser", "cream", "skincare"],
+  moisturiser: ["moisturizer", "cream", "skincare"],
+  coord: ["co ord", "coordinated", "set"],
+  set: ["coord", "co ord"],
+};
+
+function expandTerms(terms: string[]) {
+  const expanded: string[] = [];
+  for (const term of terms) {
+    expanded.push(term);
+    for (const synonym of TERM_SYNONYMS[term] || []) expanded.push(synonym);
+  }
+  return [...new Set(expanded)].slice(0, 16);
 }
 
 function priceCeiling(query: string) {
