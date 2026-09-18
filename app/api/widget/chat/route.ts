@@ -375,7 +375,11 @@ export async function POST(request: Request) {
           }
         : null;
 
-    const resolvedUi = richEnabled ? (shouldShowCommerceChips ? (parsed.ui || commerceUi) : null) : null;
+    const resolvedUi = richEnabled
+      ? (shopifyConnected
+          ? (shouldShowCommerceChips ? (parsed.ui || commerceUi) : null)
+          : parsed.ui)
+      : null;
 
     let reply = parsed.reply;
 
@@ -404,7 +408,7 @@ export async function POST(request: Request) {
     await prisma.message.create({ data: { conversationId: conversation.id, role: "assistant", content: reply } });
 
     let lead: Awaited<ReturnType<typeof qualifyAndSaveLead>> = conversation.lead;
-    if (qualification && !shopifyProducts.length) {
+    if (qualification) {
       const transcriptNewest = await prisma.message.findMany({ where: { conversationId: conversation.id }, orderBy: { createdAt: "desc" }, take: 20 });
       lead = await qualifyAndSaveLead({ businessId: agent.businessId, conversationId: conversation.id, messages: transcriptNewest.reverse() });
     }
