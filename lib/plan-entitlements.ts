@@ -14,6 +14,7 @@ export const FEATURE_MIN_PLAN = {
   emailAlerts: "STARTER",
   whatsappHandoff: "STARTER",
   conversationHistory: "STARTER",
+  shopifyIntegration: "STARTER",
   followUpWorkflow: "GROWTH",
   customWidgetBranding: "GROWTH",
   advancedWidgetControls: "GROWTH",
