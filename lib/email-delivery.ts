@@ -126,6 +126,8 @@ async function sendWithAnalytics(input: {
     subject: input.subject,
     category: input.category,
     source: input.mail.source,
+    textBody: input.text || null,
+    htmlBody: input.html || null,
   });
 
   try {
