@@ -163,20 +163,22 @@ export async function getShopifyCatalogOverview(
   if (!store || store.status !== "CONNECTED") return null;
 
   const activeWhere = { storeId: store.id, status: "ACTIVE" as const };
-  const [productCount, productTypeGroups, vendorGroups, priceStats, currencyRow] = await Promise.all([
+
+  // Keep this overview intentionally simple and adapter-safe. It runs on every
+  // widget chat, so avoid expensive GROUP BY queries that can fail on some
+  // MySQL/MariaDB adapter combinations.
+  const [productCount, typeRows, vendorRows, priceStats, currencyRow] = await Promise.all([
     prisma.shopifyProduct.count({ where: activeWhere }),
-    prisma.shopifyProduct.groupBy({
-      by: ["productType"],
+    prisma.shopifyProduct.findMany({
       where: { ...activeWhere, productType: { not: null } },
-      _count: { productType: true },
-      orderBy: { _count: { productType: "desc" } },
+      select: { productType: true },
+      distinct: ["productType"],
       take: 40,
     }),
-    prisma.shopifyProduct.groupBy({
-      by: ["vendor"],
+    prisma.shopifyProduct.findMany({
       where: { ...activeWhere, vendor: { not: null } },
-      _count: { vendor: true },
-      orderBy: { _count: { vendor: "desc" } },
+      select: { vendor: true },
+      distinct: ["vendor"],
       take: 30,
     }),
     prisma.shopifyProduct.aggregate({
@@ -190,10 +192,10 @@ export async function getShopifyCatalogOverview(
     }),
   ]);
 
-  const productTypes = productTypeGroups
+  const productTypes = typeRows
     .map((item) => item.productType?.trim())
     .filter(Boolean) as string[];
-  const vendors = vendorGroups
+  const vendors = vendorRows
     .map((item) => item.vendor?.trim())
     .filter(Boolean) as string[];
 
