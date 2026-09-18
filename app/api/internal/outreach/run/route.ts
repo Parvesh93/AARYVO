@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { crawlWebsite } from "@/lib/website-ingestion";
 import { readOutreachRows, updateOutreachRange } from "@/lib/platform-google-sheets";
@@ -32,15 +33,7 @@ function authorized(request: Request) {
   const supplied = header.slice(7).trim();
   const a = Buffer.from(expected);
   const b = Buffer.from(supplied);
-  return a.length === b.length && cryptoTimingSafeEqual(a, b);
-}
-
-function cryptoTimingSafeEqual(a: Buffer, b: Buffer) {
-  try {
-    return require("node:crypto").timingSafeEqual(a, b);
-  } catch {
-    return false;
-  }
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function parseEmail(value: string) {
