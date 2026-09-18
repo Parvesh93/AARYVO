@@ -329,6 +329,62 @@ function productPayload(products: ShopifyCatalogProduct[]) {
   }));
 }
 
+function uniqueProducts(products: ShopifyCatalogProduct[]) {
+  const seen = new Set<string>();
+  return products.filter((product) => {
+    if (seen.has(product.id)) return false;
+    seen.add(product.id);
+    return true;
+  });
+}
+
+async function fillWithAvailableAlternatives(params: {
+  businessId: string;
+  agentId: string;
+  current: ShopifyCatalogProduct[];
+  sourceMatches: ShopifyCatalogProduct[];
+  baseIntent: string;
+  desired: number;
+}) {
+  let output = uniqueProducts(params.current.filter((product) => product.availableForSale));
+
+  if (output.length >= params.desired) {
+    return output.slice(0, params.desired);
+  }
+
+  const typeCandidates = [...new Set(
+    params.sourceMatches
+      .map((product) => product.productType?.trim())
+      .filter(Boolean) as string[],
+  )].slice(0, 4);
+
+  const queries = [
+    ...typeCandidates.map((type) => `${type} available`),
+    params.baseIntent ? `${params.baseIntent} available` : "",
+    "available products",
+  ].filter(Boolean);
+
+  for (const query of queries) {
+    try {
+      const matches = await searchShopifyCatalog(
+        params.businessId,
+        query,
+        Math.max(params.desired, 10),
+        params.agentId,
+      );
+      output = uniqueProducts([
+        ...output,
+        ...matches.filter((product) => product.availableForSale),
+      ]);
+      if (output.length >= params.desired) break;
+    } catch (error) {
+      console.error("AARYVO available alternative search error", error);
+    }
+  }
+
+  return output.slice(0, params.desired);
+}
+
 async function generateCommerceSalesReply(params: {
   message: string;
   searchQuery: string;
@@ -607,23 +663,61 @@ export async function POST(request: Request) {
         }
 
         if (shopifyProducts.length) {
-          const fallbackReply = buildCommerceProductReply({
-            products: shopifyProducts,
-            alternative: false,
-            requestedCount: commerceState.requestedCount,
-          });
-          commerceReply = await generateCommerceSalesReply({
-            message,
-            searchQuery: commerceState.searchQuery,
-            products: shopifyProducts,
-            alternative: false,
-            recentMessages,
-            fallback: fallbackReply,
-          });
-          commerceUi = buildCommerceRefinementUi(
-            shopifyProducts,
-            commerceState.searchQuery,
+          const originalMatches = shopifyProducts;
+          const desiredCount = Math.min(
+            commerceState.requestedCount || 8,
+            10,
           );
+
+          const inStockMatches = originalMatches.filter(
+            (product) => product.availableForSale,
+          );
+
+          if (inStockMatches.length < desiredCount) {
+            shopifyProducts = await fillWithAvailableAlternatives({
+              businessId: agent.businessId,
+              agentId: agent.id,
+              current: inStockMatches,
+              sourceMatches: originalMatches,
+              baseIntent: commerceState.baseIntent || commerceState.searchQuery,
+              desired: desiredCount,
+            });
+          } else {
+            shopifyProducts = inStockMatches.slice(0, desiredCount);
+          }
+
+          alternativeProducts =
+            shopifyProducts.length > 0 &&
+            (
+              inStockMatches.length === 0 ||
+              shopifyProducts.some(
+                (product) =>
+                  !originalMatches.some((match) => match.id === product.id),
+              )
+            );
+
+          if (shopifyProducts.length) {
+            const fallbackReply = buildCommerceProductReply({
+              products: shopifyProducts,
+              alternative: alternativeProducts,
+              requestedCount: commerceState.requestedCount,
+            });
+            commerceReply = await generateCommerceSalesReply({
+              message,
+              searchQuery: commerceState.searchQuery,
+              products: shopifyProducts,
+              alternative: alternativeProducts,
+              recentMessages,
+              fallback: fallbackReply,
+            });
+            commerceUi = buildCommerceRefinementUi(
+              shopifyProducts,
+              commerceState.searchQuery,
+            );
+          } else {
+            commerceReply =
+              "The closest exact matches are currently sold out, so I don’t want to recommend something you can’t buy. Tell me the nearest category you’d consider and I’ll show only available options.";
+          }
         } else {
           const mustShowProducts =
             commerceState.flexible || commerceState.clarificationCount >= 3;
