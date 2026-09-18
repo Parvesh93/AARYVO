@@ -7,7 +7,7 @@ const STOP_WORDS = new Set([
   "what","which","where","when","how","there","their","them","they","its","also","only","more","less",
   "type","types","sell","selling","sold","store","shop","catalog","catalogue","collection","collections",
   "recommend","recommended","recommendation","options","option","available","availability","stock","price","prices",
-  "hello","hey","thanks","thank","welcome","there","today","help",
+  "hello","hey","thanks","thank","welcome","there","today","help","budget","range","flexible","prefer","preferred","preference",
 ]);
 
 function normalize(value: string) {
@@ -27,7 +27,7 @@ function priceCeiling(query: string) {
 }
 
 function searchTerms(query: string) {
-  return [...new Set(
+  const raw = [...new Set(
     normalize(query)
       .split(" ")
       .map((term) => term.trim())
@@ -35,6 +35,8 @@ function searchTerms(query: string) {
       .filter((term) => !STOP_WORDS.has(term))
       .filter((term) => !/^[₹$€£]?\d+(?:\.\d+)?$/.test(term)),
   )].slice(0, 8);
+
+  return expandTerms(raw);
 }
 
 function isBroadDiscoveryQuery(query: string) {
@@ -47,6 +49,18 @@ export function isShopifyCommerceQuery(query: string) {
   // A single meaningful word such as "pants", "jewellery" or "skincare"
   // should be treated as a catalogue search when Shopify is connected.
   return searchTerms(query).length > 0;
+}
+
+export function isLikelyShopifyRefinement(query: string) {
+  const normalized = normalize(query);
+  const words = normalized.split(" ").filter(Boolean);
+  if (!words.length || words.length > 6) return false;
+
+  if (/\b(any budget|no budget|budget flexible|no preference|anything|any color|any colour|any size)\b/i.test(query)) {
+    return true;
+  }
+
+  return /\b(minimal|simple|classic|modern|gold|golden|silver|rose|black|white|red|blue|green|pink|beige|brown|small|medium|large|xs|xl|xxl|casual|formal|everyday|daily|gifting|gift|party|wedding|office|workwear|premium|luxury|affordable)\b/i.test(normalized);
 }
 
 function safeStorefrontUrl(
