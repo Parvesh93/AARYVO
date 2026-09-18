@@ -131,6 +131,7 @@ export type ShopifyCatalogProduct = {
     inventoryQuantity: number | null;
     optionSummary: string | null;
   }>;
+  knowledge?: string | null;
 };
 
 export type ShopifyCatalogOverview = {
@@ -211,6 +212,7 @@ export async function searchShopifyCatalog(
   businessId: string,
   query: string,
   limit = 8,
+  agentId?: string,
 ): Promise<ShopifyCatalogProduct[]> {
   const terms = searchTerms(query);
   const maxPrice = priceCeiling(query);
@@ -222,19 +224,48 @@ export async function searchShopifyCatalog(
   const store = await connectedStore(businessId);
   if (!store || store.status !== "CONNECTED") return [];
 
+  const knowledgeMatches = agentId && terms.length
+    ? await prisma.knowledgeItem.findMany({
+        where: {
+          agentId,
+          source: { startsWith: "shopify://product/" },
+          OR: terms.flatMap((term) => [
+            { title: { contains: term } },
+            { content: { contains: term } },
+          ]),
+        },
+        select: { source: true, content: true },
+        take: 80,
+      })
+    : [];
+
+  const knowledgeByShopifyId = new Map<string, string>();
+  for (const item of knowledgeMatches) {
+    const encodedId = item.source.slice("shopify://product/".length);
+    if (!encodedId) continue;
+    try {
+      const shopifyId = decodeURIComponent(encodedId);
+      knowledgeByShopifyId.set(shopifyId, item.content);
+    } catch {}
+  }
+  const knowledgeIds = [...knowledgeByShopifyId.keys()];
+
   const where = {
     storeId: store.id,
     status: "ACTIVE",
     ...(terms.length
       ? {
-          OR: terms.flatMap((term) => [
-            { title: { contains: term } },
-            { vendor: { contains: term } },
-            { productType: { contains: term } },
-            { tags: { contains: term } },
-            { description: { contains: term } },
-            { variants: { some: { optionSummary: { contains: term } } } },
-          ]),
+          OR: [
+            ...terms.flatMap((term) => [
+              { title: { contains: term } },
+              { vendor: { contains: term } },
+              { productType: { contains: term } },
+              { tags: { contains: term } },
+              { description: { contains: term } },
+              { variants: { some: { optionSummary: { contains: term } } } },
+            ]),
+            ...(knowledgeIds.length ? [{ shopifyProductId: { in: knowledgeIds } }] : []),
+          ],
         }
       : {}),
     ...(maxPrice !== null ? { minPrice: { lte: maxPrice } } : {}),
@@ -260,6 +291,8 @@ export async function searchShopifyCatalog(
     const tags = normalize(product.tags || "");
     const description = normalize(product.description || "").slice(0, 2500);
     const variantText = normalize(product.variants.map((variant) => variant.optionSummary || variant.title).join(" "));
+    const richKnowledge = knowledgeByShopifyId.get(product.shopifyProductId) || "";
+    const knowledgeText = normalize(richKnowledge).slice(0, 12000);
 
     let score = terms.length ? 0 : 1;
     for (const term of terms) {
@@ -268,6 +301,7 @@ export async function searchShopifyCatalog(
       if (tags.includes(term)) score += 4;
       if (vendor.includes(term)) score += 3;
       if (variantText.includes(term)) score += 3;
+      if (knowledgeText.includes(term)) score += 4;
       if (description.includes(term)) score += 1;
     }
     if (product.variants.some((variant) => variant.availableForSale)) score += 2;
@@ -333,6 +367,7 @@ export async function searchShopifyCatalog(
         inventoryQuantity: variant.inventoryQuantity,
         optionSummary: variant.optionSummary,
       })),
+      knowledge: knowledgeByShopifyId.get(product.shopifyProductId) || null,
     }));
 }
 
@@ -384,6 +419,7 @@ export function buildShopifyCatalogContext(products: ShopifyCatalogProduct[]) {
       `TAGS: ${product.tags || "N/A"}`,
       `DESCRIPTION: ${product.description || "N/A"}`,
       variants ? `VARIANTS: ${variants}` : null,
+      product.knowledge ? `RICH SHOPIFY KNOWLEDGE:\n${product.knowledge.slice(0, 7000)}` : null,
       product.url ? `URL: ${product.url}` : null,
     ].filter(Boolean).join("\n");
   }).join("\n\n---\n\n");
