@@ -90,7 +90,7 @@ export function isLikelyShopifyRefinement(query: string) {
   const words = normalized.split(" ").filter(Boolean);
   if (!words.length || words.length > 6) return false;
 
-  if (/\b(any budget|no budget|budget flexible|no preference|anything|any color|any colour|any size|any style|yes|yeah|yep|sure|ok|okay|go ahead)\b/i.test(query)) {
+  if (/\b(any budget|no budget|budget flexible|no preference|anything|any color|any colour|any size|any style|any occasion|any material|any type|yes|yeah|yep|sure|ok|okay|go ahead)\b/i.test(query)) {
     return true;
   }
 
@@ -249,165 +249,90 @@ export async function searchShopifyCatalog(
   const store = await connectedStore(businessId);
   if (!store || store.status !== "CONNECTED") return [];
 
-  // Rich Shopify knowledge is optional enrichment. Never let a knowledge query
-  // failure prevent structured product search from returning real products.
-  const knowledgeByShopifyId = new Map<string, string>();
-
-  if (agentId && terms.length) {
-    try {
-      const knowledgeMatches = await prisma.knowledgeItem.findMany({
-        where: {
-          agentId,
-          OR: terms.flatMap((term) => [
-            { title: { contains: term } },
-            { content: { contains: term } },
-          ]),
-        },
-        select: { source: true, content: true },
-        take: 100,
-      });
-
-      for (const item of knowledgeMatches) {
-        if (!item.source.startsWith("shopify://product/")) continue;
-        const encodedId = item.source.slice("shopify://product/".length);
-        if (!encodedId) continue;
-        try {
-          knowledgeByShopifyId.set(decodeURIComponent(encodedId), item.content);
-        } catch {}
-      }
-    } catch (error) {
-      console.error("AARYVO Shopify knowledge search error", error);
-    }
-  }
-
-  const includeVariants = {
-    variants: {
-      orderBy: { price: "asc" as const },
-      take: 16,
+  // Read a bounded slice of the synced catalogue and rank in JavaScript.
+  // This avoids production differences in text operators/collations across
+  // Prisma + MariaDB while keeping the common 100-1000 product stores fast.
+  const products = await prisma.shopifyProduct.findMany({
+    where: { storeId: store.id, status: "ACTIVE" },
+    include: {
+      variants: {
+        orderBy: { price: "asc" },
+        take: 16,
+      },
     },
-  };
+    orderBy: { syncedAt: "desc" },
+    take: 1500,
+  }) as ShopifyProductSearchRow[];
 
-  const rows = new Map<string, ShopifyProductSearchRow>();
-
-  function addRows(found: ShopifyProductSearchRow[]) {
-    for (const product of found) rows.set(product.id, product);
-  }
-
-  if (!terms.length && broadDiscovery) {
-    addRows(await prisma.shopifyProduct.findMany({
-      where: { storeId: store.id, status: "ACTIVE" },
-      include: includeVariants,
-      orderBy: { syncedAt: "desc" },
-      take: 100,
-    }) as ShopifyProductSearchRow[]);
-  } else {
-    // First search the strongest structured commerce fields. This keeps queries
-    // such as "rings", "bangles" or "skincare" reliable even if rich knowledge
-    // indexing is unavailable.
-    const primaryOr = terms.flatMap((term) => [
-      { title: { contains: term } },
-      { productType: { contains: term } },
-      { tags: { contains: term } },
-      { vendor: { contains: term } },
-    ]);
-
-    if (primaryOr.length) {
-      addRows(await prisma.shopifyProduct.findMany({
-        where: {
-          storeId: store.id,
-          status: "ACTIVE",
-          OR: primaryOr,
-        },
-        include: includeVariants,
-        take: 120,
-      }) as ShopifyProductSearchRow[]);
-    }
-
-    // Search descriptions separately so a very broad description match cannot
-    // crowd out exact title/product-type matches before ranking.
-    if (rows.size < 80 && terms.length) {
-      addRows(await prisma.shopifyProduct.findMany({
-        where: {
-          storeId: store.id,
-          status: "ACTIVE",
-          OR: terms.map((term) => ({ description: { contains: term } })),
-        },
-        include: includeVariants,
-        take: 80,
-      }) as ShopifyProductSearchRow[]);
-    }
-
-    const knowledgeIds = [...knowledgeByShopifyId.keys()];
-    if (knowledgeIds.length) {
-      addRows(await prisma.shopifyProduct.findMany({
-        where: {
-          storeId: store.id,
-          status: "ACTIVE",
-          shopifyProductId: { in: knowledgeIds },
-        },
-        include: includeVariants,
-        take: 100,
-      }) as ShopifyProductSearchRow[]);
-    }
-
-    // Production safety net: if database text matching returns nothing, scan a
-    // bounded slice of the synced catalogue and rank it in JavaScript. This
-    // keeps smaller/medium stores reliable even when adapter collation or text
-    // matching behaves differently in production.
-    if (!rows.size && terms.length) {
-      const fallbackRows = await prisma.shopifyProduct.findMany({
-        where: { storeId: store.id, status: "ACTIVE" },
-        include: includeVariants,
-        orderBy: { syncedAt: "desc" },
-        take: 1200,
-      }) as ShopifyProductSearchRow[];
-
-      for (const product of fallbackRows) {
-        const haystack = normalize([
-          product.title,
-          product.productType || "",
-          product.vendor || "",
-          product.tags || "",
-          product.description || "",
-          product.variants.map((variant) => variant.optionSummary || variant.title).join(" "),
-        ].join(" "));
-
-        if (terms.some((term) => haystack.includes(term))) {
-          rows.set(product.id, product);
-        }
-      }
-    }
-  }
-
-  const candidates = [...rows.values()].filter((product) => {
+  const candidateRows = products.filter((product) => {
     if (maxPrice !== null && (product.minPrice === null || product.minPrice > maxPrice)) return false;
     if (wantsAvailable && !product.variants.some((variant) => variant.availableForSale)) return false;
-    return true;
+
+    if (!terms.length) return broadDiscovery || maxPrice !== null;
+
+    const structured = normalize([
+      product.title,
+      product.productType || "",
+      product.vendor || "",
+      product.tags || "",
+      product.description || "",
+      product.variants.map((variant) => variant.optionSummary || variant.title).join(" "),
+    ].join(" "));
+
+    return terms.some((term) => structured.includes(term));
   });
 
-  const scored = candidates.map((product) => {
+  // Load rich Shopify knowledge only for plausible candidates. Exact source
+  // lookup is adapter-safe and brings collections, metafields, SEO and media
+  // text into ranking without relying on SQL full-text behaviour.
+  const knowledgeByShopifyId = new Map<string, string>();
+
+  if (agentId && candidateRows.length) {
+    try {
+      const sourcePairs = candidateRows.slice(0, 120).map((product) => ({
+        shopifyProductId: product.shopifyProductId,
+        source: `shopify://product/${encodeURIComponent(product.shopifyProductId)}`,
+      }));
+      const sources = sourcePairs.map((item) => item.source);
+      const items = await prisma.knowledgeItem.findMany({
+        where: { agentId, source: { in: sources } },
+        select: { source: true, content: true },
+      });
+      const idBySource = new Map(sourcePairs.map((item) => [item.source, item.shopifyProductId]));
+      for (const item of items) {
+        const id = idBySource.get(item.source);
+        if (id) knowledgeByShopifyId.set(id, item.content);
+      }
+    } catch (error) {
+      console.error("AARYVO Shopify knowledge enrichment error", error);
+    }
+  }
+
+  const scored = candidateRows.map((product) => {
     const title = normalize(product.title);
     const type = normalize(product.productType || "");
     const vendor = normalize(product.vendor || "");
     const tags = normalize(product.tags || "");
-    const description = normalize(product.description || "").slice(0, 3000);
+    const description = normalize(product.description || "").slice(0, 3500);
     const variantText = normalize(
       product.variants.map((variant) => variant.optionSummary || variant.title).join(" "),
     );
-    const richKnowledge = knowledgeByShopifyId.get(product.shopifyProductId) || "";
-    const knowledgeText = normalize(richKnowledge).slice(0, 16000);
+    const knowledgeText = normalize(
+      knowledgeByShopifyId.get(product.shopifyProductId) || "",
+    ).slice(0, 18000);
 
     let score = terms.length ? 0 : 1;
+
     for (const term of terms) {
-      if (title === term) score += 14;
-      else if (title.includes(term)) score += 9;
-      if (type === term) score += 12;
-      else if (type.includes(term)) score += 7;
-      if (tags.includes(term)) score += 5;
+      if (title === term) score += 16;
+      else if (title.includes(term)) score += 10;
+      if (type === term) score += 14;
+      else if (type.includes(term)) score += 8;
+      if (tags.includes(term)) score += 6;
+      if (variantText.includes(term)) score += 5;
+      if (knowledgeText.includes(term)) score += 5;
       if (vendor.includes(term)) score += 3;
-      if (variantText.includes(term)) score += 4;
-      if (knowledgeText.includes(term)) score += 4;
-      if (description.includes(term)) score += 1;
+      if (description.includes(term)) score += 2;
     }
 
     if (product.variants.some((variant) => variant.availableForSale)) score += 2;
