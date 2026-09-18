@@ -512,6 +512,7 @@ export async function POST(request: Request) {
             requestedCount: null,
             flexible: false,
             broad: false,
+            specificProductIntent: false,
           };
 
     let shopifyProducts: ShopifyCatalogProduct[] = [];
