@@ -164,9 +164,9 @@ export async function getShopifyCatalogOverview(
 
   const activeWhere = { storeId: store.id, status: "ACTIVE" as const };
 
-  // Use simple reads only here because this function runs on every chat request.
-  // Avoid adapter-sensitive GROUP BY / DISTINCT queries on production MariaDB.
-  const [productCount, sample, priceStats] = await Promise.all([
+  // Keep the chat-time overview to basic reads only. This avoids adapter-
+  // sensitive aggregate/group operations and is reliable on production MariaDB.
+  const [productCount, sample] = await Promise.all([
     prisma.shopifyProduct.count({ where: activeWhere }),
     prisma.shopifyProduct.findMany({
       where: activeWhere,
@@ -174,13 +174,10 @@ export async function getShopifyCatalogOverview(
         productType: true,
         vendor: true,
         currencyCode: true,
+        minPrice: true,
+        maxPrice: true,
       },
       take: 500,
-    }),
-    prisma.shopifyProduct.aggregate({
-      where: activeWhere,
-      _min: { minPrice: true },
-      _max: { maxPrice: true },
     }),
   ]);
 
@@ -192,14 +189,18 @@ export async function getShopifyCatalogOverview(
     sample.map((item) => item.vendor?.trim()).filter(Boolean) as string[],
   )].slice(0, 30);
 
+  const prices = sample
+    .flatMap((item) => [item.minPrice, item.maxPrice])
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
   return {
     shopDomain: store.shopDomain,
     productCount,
     productTypes,
     vendors,
     currencyCode: sample.find((item) => item.currencyCode)?.currencyCode || null,
-    minPrice: priceStats._min.minPrice ?? null,
-    maxPrice: priceStats._max.maxPrice ?? null,
+    minPrice: prices.length ? Math.min(...prices) : null,
+    maxPrice: prices.length ? Math.max(...prices) : null,
   };
 }
 
