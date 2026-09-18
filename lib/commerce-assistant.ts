@@ -14,6 +14,7 @@ export type CommerceState = {
   requestedCount: number | null;
   flexible: boolean;
   broad: boolean;
+  specificProductIntent: boolean;
 };
 
 export type CommerceUi = {
@@ -74,6 +75,39 @@ export function looksLikeCommerceIntent(
   // falls back to the normal website conversation engine.
   const words = normalize(text).split(" ").filter(Boolean);
   return words.length > 0 && words.length <= 4;
+}
+
+export function hasSpecificCommerceProductIntent(
+  message: string,
+  overview: ShopifyCatalogOverview | null,
+) {
+  const text = normalize(message);
+  if (!text) return false;
+
+  if (
+    overview?.productTypes.some(
+      (type) => phraseIn(text, type) || phraseIn(type, text),
+    )
+  ) {
+    return true;
+  }
+
+  // A concrete noun request such as "rings", "serum", "black top" or
+  // "running shoes" should be treated as product-specific. Broad shopping
+  // language such as gifts/recommendations should be clarified first.
+  const broadOnly =
+    BROAD_COMMERCE.test(message) &&
+    !/\b(ring|rings|earring|earrings|necklace|necklaces|bangle|bangles|bracelet|bracelets|top|tops|shirt|shirts|dress|dresses|pants|trousers|skincare|serum|cleanser|cream|moisturizer|moisturiser|shoe|shoes|bag|bags)\b/i.test(
+      message,
+    );
+
+  return !broadOnly && normalize(message).split(" ").filter(Boolean).length <= 5;
+}
+
+export function shouldClarifyCommerceBeforeProducts(state: CommerceState) {
+  if (state.flexible || state.requestedCount) return false;
+  if (state.specificProductIntent) return false;
+  return state.broad && state.clarificationCount < 3;
 }
 
 function isBaseCommerceMessage(
@@ -149,6 +183,7 @@ export function deriveCommerceState(params: {
       requestedCount: null,
       flexible: false,
       broad: false,
+      specificProductIntent: false,
     };
   }
 
@@ -182,6 +217,9 @@ export function deriveCommerceState(params: {
     requestedCount: requestedProductCount(currentMessage),
     flexible: currentFlexible,
     broad: BROAD_COMMERCE.test(baseIntent) || BROAD_COMMERCE.test(currentMessage),
+    specificProductIntent:
+      hasSpecificCommerceProductIntent(baseIntent, overview) ||
+      hasSpecificCommerceProductIntent(currentMessage, overview),
   };
 }
 
@@ -262,7 +300,7 @@ export function buildCommerceClarification(params: {
   if (state.broad && state.clarificationCount === 0) {
     return {
       reply:
-        "Absolutely — what kind of product are you shopping for? I’ll narrow the catalogue for you.",
+        "Sure — what kind of gift or product would you like me to focus on? Pick a category, or tell me who it’s for and I’ll narrow it down.",
       ui: categoryChips(overview),
     };
   }
@@ -340,7 +378,31 @@ export function buildCommerceRefinementUi(
   products: ShopifyCatalogProduct[],
   query: string,
 ): CommerceUi | null {
-  const options = extractRefinementValues(products, query);
+  const typeCounts = new Map<string, number>();
+  for (const product of products) {
+    const type = product.productType?.trim();
+    if (!type) continue;
+    typeCounts.set(type, (typeCounts.get(type) || 0) + 1);
+  }
+
+  const types = [...typeCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([type]) => type);
+
+  if (types.length >= 3) {
+    return {
+      type: "chips",
+      options: types.slice(0, 5).map((type) => ({
+        label: type,
+        value: `Show me ${type}`,
+      })),
+    };
+  }
+
+  const options = extractRefinementValues(products, query).filter(
+    (option) =>
+      !/^(default title|default|one size|one-size)$/i.test(option.label.trim()),
+  );
   if (!options.length) return null;
   return { type: "chips", options };
 }
