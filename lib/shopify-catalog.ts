@@ -7,7 +7,7 @@ const STOP_WORDS = new Set([
   "what","which","where","when","how","there","their","them","they","its","also","only","more","less",
   "type","types","sell","selling","sold","store","shop","catalog","catalogue","collection","collections",
   "recommend","recommended","recommendation","options","option","available","availability","stock","price","prices",
-  "hello","hey","thanks","thank","welcome","there","today","help","budget","range","flexible","prefer","preferred","preference",
+  "hello","hey","thanks","thank","welcome","there","today","help","budget","range","flexible","prefer","preferred","preference","style","styles","yes","yeah","yep","sure","okay","ok",
 ]);
 
 function normalize(value: string) {
@@ -90,7 +90,7 @@ export function isLikelyShopifyRefinement(query: string) {
   const words = normalized.split(" ").filter(Boolean);
   if (!words.length || words.length > 6) return false;
 
-  if (/\b(any budget|no budget|budget flexible|no preference|anything|any color|any colour|any size)\b/i.test(query)) {
+  if (/\b(any budget|no budget|budget flexible|no preference|anything|any color|any colour|any size|any style|yes|yeah|yep|sure|ok|okay|go ahead)\b/i.test(query)) {
     return true;
   }
 
@@ -348,6 +348,34 @@ export async function searchShopifyCatalog(
         include: includeVariants,
         take: 100,
       }) as ShopifyProductSearchRow[]);
+    }
+
+    // Production safety net: if database text matching returns nothing, scan a
+    // bounded slice of the synced catalogue and rank it in JavaScript. This
+    // keeps smaller/medium stores reliable even when adapter collation or text
+    // matching behaves differently in production.
+    if (!rows.size && terms.length) {
+      const fallbackRows = await prisma.shopifyProduct.findMany({
+        where: { storeId: store.id, status: "ACTIVE" },
+        include: includeVariants,
+        orderBy: { syncedAt: "desc" },
+        take: 1200,
+      }) as ShopifyProductSearchRow[];
+
+      for (const product of fallbackRows) {
+        const haystack = normalize([
+          product.title,
+          product.productType || "",
+          product.vendor || "",
+          product.tags || "",
+          product.description || "",
+          product.variants.map((variant) => variant.optionSummary || variant.title).join(" "),
+        ].join(" "));
+
+        if (terms.some((term) => haystack.includes(term))) {
+          rows.set(product.id, product);
+        }
+      }
     }
   }
 
