@@ -1,0 +1,36 @@
+name: Aaryvo Outreach
+
+on:
+  schedule:
+    # 10:00 AM India Standard Time (UTC+5:30), Monday-Friday.
+    - cron: "30 4 * * 1-5"
+  workflow_dispatch:
+
+concurrency:
+  group: aaryvo-outreach
+  cancel-in-progress: false
+
+jobs:
+  run-outreach:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Trigger Aaryvo outreach worker
+        env:
+          OUTREACH_AGENT_SECRET: ${{ secrets.OUTREACH_AGENT_SECRET }}
+        run: |
+          if [ -z "$OUTREACH_AGENT_SECRET" ]; then
+            echo "OUTREACH_AGENT_SECRET is not configured in GitHub Actions secrets."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          http_code="$(curl --silent --show-error --location             --output "$response_file"             --write-out "%{http_code}"             --request POST             "https://aaryvo.ppdesigntech.com/api/internal/outreach/run"             --header "Authorization: Bearer $OUTREACH_AGENT_SECRET"             --header "Content-Type: application/json"             --data '{}')"
+
+          cat "$response_file"
+          echo
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Aaryvo outreach worker returned HTTP $http_code"
+            exit 1
+          fi
