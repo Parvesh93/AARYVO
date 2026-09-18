@@ -1,0 +1,33 @@
+name: Aaryvo Outreach Dry Run
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: aaryvo-outreach-dry-run
+  cancel-in-progress: false
+
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Test Aaryvo outreach worker without sending
+        env:
+          OUTREACH_AGENT_SECRET: ${{ secrets.OUTREACH_AGENT_SECRET }}
+        run: |
+          if [ -z "$OUTREACH_AGENT_SECRET" ]; then
+            echo "OUTREACH_AGENT_SECRET is not configured in GitHub Actions secrets."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          http_code="$(curl --silent --show-error --location             --output "$response_file"             --write-out "%{http_code}"             --request POST             "https://aaryvo.ppdesigntech.com/api/internal/outreach/run"             --header "Authorization: Bearer $OUTREACH_AGENT_SECRET"             --header "Content-Type: application/json"             --data '{"dryRun":true,"limit":5}')"
+
+          cat "$response_file"
+          echo
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "Aaryvo outreach dry run returned HTTP $http_code"
+            exit 1
+          fi
