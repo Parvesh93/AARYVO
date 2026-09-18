@@ -10,22 +10,34 @@ type MailConfig = {
 };
 
 function platformMailConfig(): MailConfig | null {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+  const host = process.env.PLATFORM_SMTP_HOST || process.env.SMTP_HOST;
+  const user = process.env.PLATFORM_SMTP_USER || process.env.SMTP_USER;
+  const pass = process.env.PLATFORM_SMTP_PASS || process.env.SMTP_PASS;
 
   if (!host || !user || !pass) return null;
 
-  const port = Number(process.env.SMTP_PORT || 587);
+  const port = Number(
+    process.env.PLATFORM_SMTP_PORT || process.env.SMTP_PORT || 587,
+  );
+  const secureSetting = process.env.PLATFORM_SMTP_SECURE?.trim().toLowerCase();
+  const secure =
+    secureSetting === "true"
+      ? true
+      : secureSetting === "false"
+        ? false
+        : port === 465;
 
   return {
     transporter: nodemailer.createTransport({
       host,
       port,
-      secure: port === 465,
+      secure,
       auth: { user, pass },
     }),
-    from: process.env.SMTP_FROM || `AARYVO <${user}>`,
+    from:
+      process.env.PLATFORM_SMTP_FROM ||
+      process.env.SMTP_FROM ||
+      `Aaryvo <${user}>`,
     source: "aaryvo",
   };
 }
