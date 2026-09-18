@@ -23,6 +23,7 @@ import {
   desiredCommerceProductCount,
   isSimpleGreeting,
   looksLikeCommerceIntent,
+  shouldClarifyCommerceBeforeProducts,
 } from "@/lib/commerce-assistant";
 
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -520,80 +521,91 @@ export async function POST(request: Request) {
 
     if (commerceState.active) {
       const desired = desiredCommerceProductCount(commerceState);
+      const clarifyFirst = shouldClarifyCommerceBeforeProducts(commerceState);
 
-      try {
-        shopifyProducts = await searchShopifyCatalog(
-          agent.businessId,
-          commerceState.searchQuery,
-          Math.min(Math.max(desired, 8), 10),
-          agent.id,
-        );
-      } catch (error) {
-        console.error("AARYVO Shopify exact product search error", error);
-      }
-
-      if (shopifyProducts.length) {
-        commerceReply = buildCommerceProductReply({
-          products: shopifyProducts,
-          alternative: false,
-          requestedCount: commerceState.requestedCount,
+      if (clarifyFirst) {
+        const clarification = buildCommerceClarification({
+          state: commerceState,
+          overview: shopifyOverview,
         });
-        commerceUi = buildCommerceRefinementUi(
-          shopifyProducts,
-          commerceState.searchQuery,
-        );
+
+        commerceReply = clarification.reply;
+        commerceUi = clarification.ui;
       } else {
-        const mustShowProducts =
-          commerceState.flexible || commerceState.clarificationCount >= 3;
+        try {
+          shopifyProducts = await searchShopifyCatalog(
+            agent.businessId,
+            commerceState.searchQuery,
+            Math.min(Math.max(desired, 8), 10),
+            agent.id,
+          );
+        } catch (error) {
+          console.error("AARYVO Shopify exact product search error", error);
+        }
 
-        if (!mustShowProducts) {
-          const clarification = buildCommerceClarification({
-            state: commerceState,
-            overview: shopifyOverview,
+        if (shopifyProducts.length) {
+          commerceReply = buildCommerceProductReply({
+            products: shopifyProducts,
+            alternative: false,
+            requestedCount: commerceState.requestedCount,
           });
-
-          commerceReply = clarification.reply;
-          commerceUi = clarification.ui;
+          commerceUi = buildCommerceRefinementUi(
+            shopifyProducts,
+            commerceState.searchQuery,
+          );
         } else {
-          const fallbackQueries = [
-            commerceState.baseIntent,
-            "products",
-          ].filter(Boolean);
+          const mustShowProducts =
+            commerceState.flexible || commerceState.clarificationCount >= 3;
 
-          for (const fallbackQuery of fallbackQueries) {
-            try {
-              const fallback = await searchShopifyCatalog(
-                agent.businessId,
-                fallbackQuery,
-                10,
-                agent.id,
-              );
-              if (fallback.length) {
-                shopifyProducts = fallback;
-                alternativeProducts = true;
-                break;
-              }
-            } catch (error) {
-              console.error(
-                "AARYVO Shopify alternative product search error",
-                error,
-              );
-            }
-          }
-
-          if (shopifyProducts.length) {
-            commerceReply = buildCommerceProductReply({
-              products: shopifyProducts,
-              alternative: true,
-              requestedCount: commerceState.requestedCount,
+          if (!mustShowProducts) {
+            const clarification = buildCommerceClarification({
+              state: commerceState,
+              overview: shopifyOverview,
             });
-            commerceUi = buildCommerceRefinementUi(
-              shopifyProducts,
-              commerceState.searchQuery,
-            );
+
+            commerceReply = clarification.reply;
+            commerceUi = clarification.ui;
           } else {
-            commerceReply =
-              "I couldn’t find an exact match in the current catalogue. Tell me the closest product type you’d consider and I’ll help you find the best available option.";
+            const fallbackQueries = [
+              commerceState.baseIntent,
+              "products",
+            ].filter(Boolean);
+
+            for (const fallbackQuery of fallbackQueries) {
+              try {
+                const fallback = await searchShopifyCatalog(
+                  agent.businessId,
+                  fallbackQuery,
+                  10,
+                  agent.id,
+                );
+                if (fallback.length) {
+                  shopifyProducts = fallback;
+                  alternativeProducts = true;
+                  break;
+                }
+              } catch (error) {
+                console.error(
+                  "AARYVO Shopify alternative product search error",
+                  error,
+                );
+              }
+            }
+
+            if (shopifyProducts.length) {
+              commerceReply = buildCommerceProductReply({
+                products: shopifyProducts,
+                alternative: true,
+                requestedCount: commerceState.requestedCount,
+              });
+              commerceUi = buildCommerceRefinementUi(
+                shopifyProducts,
+                commerceState.searchQuery,
+              );
+            } else {
+              commerceReply =
+                "I couldn’t find that exact combination, but I can still help you choose from what is available. Tell me the closest product category you’d consider and I’ll narrow it down.";
+            }
           }
         }
       }
@@ -630,11 +642,26 @@ ${
       ? `
 
 RICH RESPONSE FORMAT:
-Return ONLY one JSON object {"reply":"Your reply","ui":null}. ui may be chips, buttons or cards using only approved knowledge. Maximum 6 options or 4 cards. No HTML or code fences.`
+Return ONLY one valid JSON object with this shape:
+{"reply":"Your conversational reply","ui":null}
+
+You may optionally replace ui with ONE of:
+{"type":"chips","options":[{"label":"Short label","value":"message sent when clicked"}]}
+{"type":"buttons","options":[{"label":"Short label","value":"message sent when clicked"}]}
+{"type":"cards","cards":[{"title":"Title","description":"One short factual description","actionLabel":"Tell me more","value":"message sent when clicked"}]}
+
+Use chips when a visitor can answer naturally by choosing among 2-6 useful options such as service, budget, timeline, category or yes/no.
+Use buttons for stronger next actions.
+Use cards when comparing 2-4 services, initiatives or offerings that are explicitly supported by approved knowledge.
+Do not repeat the same UI mechanically on every answer. UI must be relevant to the visitor's current question.
+Do not invent option labels, service names or card facts.
+Maximum 6 options or 4 cards.
+No HTML, JavaScript or markdown code fences.
+The entire response must be the single JSON object.`
       : `
 
 RESPONSE FORMAT:
-Reply with plain conversational text only. Do not output JSON or interactive UI.`;
+Reply with conversational text only. Do not output JSON or interactive UI.`;
 
     let parsed: { reply: string; ui: RichUi | null };
 
