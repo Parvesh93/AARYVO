@@ -5,10 +5,24 @@ const STOP_WORDS = new Set([
   "can","could","would","should","want","need","show","find","give","tell","about","looking","something",
   "product","products","item","items","please","under","below","above","over","than","into","some","any",
   "what","which","where","when","how","there","their","them","they","its","also","only","more","less",
+  "type","types","sell","selling","sold","store","shop","catalog","catalogue","collection","collections",
+  "recommend","recommended","recommendation","options","option","available","availability","stock","price","prices",
 ]);
 
 function normalize(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9₹$€£.%\s-]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function priceCeiling(query: string) {
+  const normalized = query.replace(/,/g, "");
+  const match = normalized.match(
+    /(?:under|below|less than|up to|upto|maximum|max|budget(?:\s+is)?(?:\s+around)?)[^0-9]{0,12}(?:₹|\$|€|£)?\s*(\d+(?:\.\d+)?)/i,
+  );
+  if (match?.[1]) {
+    const value = Number(match[1]);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  return null;
 }
 
 function searchTerms(query: string) {
@@ -16,11 +30,29 @@ function searchTerms(query: string) {
     normalize(query)
       .split(" ")
       .map((term) => term.trim())
-      .filter((term) => term.length >= 3 && !STOP_WORDS.has(term) && !/^\d+$/.test(term)),
+      .filter((term) => term.length >= 3)
+      .filter((term) => !STOP_WORDS.has(term))
+      .filter((term) => !/^[₹$€£]?\d+(?:\.\d+)?$/.test(term)),
   )].slice(0, 8);
 }
 
-function safeStorefrontUrl(websiteUrl: string | null, shopDomain: string, handle: string | null, onlineStoreUrl: string | null) {
+function isBroadDiscoveryQuery(query: string) {
+  return /\b(what.*sell|what.*product|what.*collection|show.*product|show.*item|browse|recommend|suggest|catalog(?:ue)?|shop|collection|products?|items?)\b/i.test(query);
+}
+
+export function isShopifyCommerceQuery(query: string) {
+  if (priceCeiling(query) !== null) return true;
+  if (/\b(product|products|item|items|collection|collections|buy|shop|price|cost|size|colour|color|variant|stock|available|gift|gifting|recommend|suggest)\b/i.test(query)) return true;
+  const terms = searchTerms(query);
+  return terms.length > 0 && query.trim().split(/\s+/).length >= 2;
+}
+
+function safeStorefrontUrl(
+  websiteUrl: string | null,
+  shopDomain: string,
+  handle: string | null,
+  onlineStoreUrl: string | null,
+) {
   if (onlineStoreUrl?.startsWith("https://")) return onlineStoreUrl;
   if (!handle) return null;
   try {
@@ -53,15 +85,18 @@ export type ShopifyCatalogProduct = {
   }>;
 };
 
-export async function searchShopifyCatalog(
-  businessId: string,
-  query: string,
-  limit = 8,
-): Promise<ShopifyCatalogProduct[]> {
-  const terms = searchTerms(query);
-  if (!terms.length) return [];
+export type ShopifyCatalogOverview = {
+  shopDomain: string;
+  productCount: number;
+  productTypes: string[];
+  vendors: string[];
+  currencyCode: string | null;
+  minPrice: number | null;
+  maxPrice: number | null;
+};
 
-  const store = await prisma.shopifyStore.findUnique({
+async function connectedStore(businessId: string) {
+  return prisma.shopifyStore.findUnique({
     where: { businessId },
     select: {
       id: true,
@@ -70,27 +105,94 @@ export async function searchShopifyCatalog(
       business: { select: { websiteUrl: true } },
     },
   });
+}
+
+export async function getShopifyCatalogOverview(
+  businessId: string,
+): Promise<ShopifyCatalogOverview | null> {
+  const store = await connectedStore(businessId);
+  if (!store || store.status !== "CONNECTED") return null;
+
+  const [productCount, sample] = await Promise.all([
+    prisma.shopifyProduct.count({
+      where: { storeId: store.id, status: "ACTIVE" },
+    }),
+    prisma.shopifyProduct.findMany({
+      where: { storeId: store.id, status: "ACTIVE" },
+      select: {
+        productType: true,
+        vendor: true,
+        currencyCode: true,
+        minPrice: true,
+        maxPrice: true,
+      },
+      take: 250,
+    }),
+  ]);
+
+  const productTypes = [...new Set(sample.map((item) => item.productType?.trim()).filter(Boolean) as string[])]
+    .slice(0, 30);
+  const vendors = [...new Set(sample.map((item) => item.vendor?.trim()).filter(Boolean) as string[])]
+    .slice(0, 20);
+  const prices = sample
+    .flatMap((item) => [item.minPrice, item.maxPrice])
+    .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+  return {
+    shopDomain: store.shopDomain,
+    productCount,
+    productTypes,
+    vendors,
+    currencyCode: sample.find((item) => item.currencyCode)?.currencyCode || null,
+    minPrice: prices.length ? Math.min(...prices) : null,
+    maxPrice: prices.length ? Math.max(...prices) : null,
+  };
+}
+
+export async function searchShopifyCatalog(
+  businessId: string,
+  query: string,
+  limit = 8,
+): Promise<ShopifyCatalogProduct[]> {
+  const terms = searchTerms(query);
+  const maxPrice = priceCeiling(query);
+  const broadDiscovery = isBroadDiscoveryQuery(query);
+  const wantsAvailable = /\b(in stock|available now|available|ready to ship)\b/i.test(query);
+
+  if (!terms.length && maxPrice === null && !broadDiscovery) return [];
+
+  const store = await connectedStore(businessId);
   if (!store || store.status !== "CONNECTED") return [];
 
+  const where = {
+    storeId: store.id,
+    status: "ACTIVE",
+    ...(terms.length
+      ? {
+          OR: terms.flatMap((term) => [
+            { title: { contains: term } },
+            { vendor: { contains: term } },
+            { productType: { contains: term } },
+            { tags: { contains: term } },
+            { description: { contains: term } },
+            { variants: { some: { optionSummary: { contains: term } } } },
+          ]),
+        }
+      : {}),
+    ...(maxPrice !== null ? { minPrice: { lte: maxPrice } } : {}),
+    ...(wantsAvailable ? { variants: { some: { availableForSale: true } } } : {}),
+  };
+
   const products = await prisma.shopifyProduct.findMany({
-    where: {
-      storeId: store.id,
-      status: "ACTIVE",
-      OR: terms.flatMap((term) => [
-        { title: { contains: term } },
-        { vendor: { contains: term } },
-        { productType: { contains: term } },
-        { tags: { contains: term } },
-        { description: { contains: term } },
-      ]),
-    },
+    where,
     include: {
       variants: {
         orderBy: { price: "asc" },
         take: 12,
       },
     },
-    take: 40,
+    orderBy: [{ syncedAt: "desc" }],
+    take: 60,
   });
 
   const scored = products.map((product) => {
@@ -99,16 +201,19 @@ export async function searchShopifyCatalog(
     const vendor = normalize(product.vendor || "");
     const tags = normalize(product.tags || "");
     const description = normalize(product.description || "").slice(0, 2500);
+    const variantText = normalize(product.variants.map((variant) => variant.optionSummary || variant.title).join(" "));
 
-    let score = 0;
+    let score = terms.length ? 0 : 1;
     for (const term of terms) {
       if (title.includes(term)) score += 8;
       if (type.includes(term)) score += 5;
       if (tags.includes(term)) score += 4;
       if (vendor.includes(term)) score += 3;
+      if (variantText.includes(term)) score += 3;
       if (description.includes(term)) score += 1;
     }
     if (product.variants.some((variant) => variant.availableForSale)) score += 2;
+    if (maxPrice !== null && product.minPrice !== null && product.minPrice <= maxPrice) score += 3;
     return { product, score };
   });
 
@@ -144,6 +249,22 @@ export async function searchShopifyCatalog(
         optionSummary: variant.optionSummary,
       })),
     }));
+}
+
+export function buildShopifyOverviewContext(overview: ShopifyCatalogOverview | null) {
+  if (!overview) return "";
+  const priceRange =
+    overview.minPrice !== null
+      ? `${overview.currencyCode || ""} ${overview.minPrice}${overview.maxPrice !== null && overview.maxPrice !== overview.minPrice ? `–${overview.maxPrice}` : ""}`
+      : "N/A";
+
+  return [
+    `CONNECTED SHOPIFY STORE: ${overview.shopDomain}`,
+    `ACTIVE PRODUCT COUNT: ${overview.productCount}`,
+    `PRODUCT TYPES: ${overview.productTypes.length ? overview.productTypes.join(", ") : "Not categorized"}`,
+    `VENDORS: ${overview.vendors.length ? overview.vendors.join(", ") : "N/A"}`,
+    `CATALOGUE PRICE RANGE: ${priceRange}`,
+  ].join("\n");
 }
 
 export function buildShopifyCatalogContext(products: ShopifyCatalogProduct[]) {
