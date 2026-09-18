@@ -4,6 +4,7 @@ import {
   exchangeShopifyCode,
   normalizeShopDomain,
   saveShopifyConnection,
+  shopifyAppUrl,
   verifyShopifyCallbackHmac,
   verifyShopifyState,
 } from "@/lib/shopify";
@@ -36,11 +37,11 @@ export async function GET(request: Request) {
       scope: token.scope,
     });
 
-    const redirectUrl = new URL("/dashboard/integrations", request.url);
+    const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
     redirectUrl.searchParams.set("shopify", "connected");
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
-    const redirectUrl = new URL("/dashboard/integrations", request.url);
+    const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
     redirectUrl.searchParams.set("shopify", "error");
     redirectUrl.searchParams.set(
       "message",
