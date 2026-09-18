@@ -329,6 +329,68 @@ function productPayload(products: ShopifyCatalogProduct[]) {
   }));
 }
 
+async function generateCommerceSalesReply(params: {
+  message: string;
+  searchQuery: string;
+  products: ShopifyCatalogProduct[];
+  alternative: boolean;
+  recentMessages: Array<{ role: string; content: string }>;
+  fallback: string;
+}) {
+  if (!params.products.length) return params.fallback;
+
+  try {
+    const productContext = buildShopifyCatalogContext(
+      params.products.slice(0, 8),
+    ).slice(0, 14000);
+
+    const transcript = params.recentMessages
+      .slice(-8)
+      .map(
+        (item) =>
+          `${item.role === "assistant" ? "SALESPERSON" : "CUSTOMER"}: ${item.content}`,
+      )
+      .join("\n");
+
+    const response = await client.responses.create({
+      model: MODEL,
+      instructions: `You are a skilled in-store ecommerce salesperson.
+Write only the short customer-facing reply that appears above product cards.
+
+Rules:
+- Use ONLY the supplied live Shopify product facts.
+- Sound natural and specific to what the customer asked; do not repeat a stock template.
+- Mention one or two actual product names when that helps the recommendation.
+- Briefly explain why they fit using only supplied title, description, tags, variants, availability or price.
+- Do NOT invent gifting suitability, material, features, discounts or availability.
+- If these are alternatives rather than exact matches, say that naturally.
+- Products are already being displayed below, so never say you cannot show listings.
+- Do not ask another generic budget/style/occasion question after products are shown.
+- At most one short refinement suggestion may be included.
+- Keep it to 1-3 concise sentences. No JSON.`,
+      input: `CUSTOMER'S CURRENT MESSAGE:
+${params.message}
+
+CURRENT SHOPPING INTENT:
+${params.searchQuery}
+
+ALTERNATIVES: ${params.alternative ? "yes" : "no"}
+
+RECENT CONVERSATION:
+${transcript}
+
+LIVE SHOPIFY MATCHES:
+${productContext}`,
+    });
+
+    const reply = (response.output_text || "").trim().slice(0, 900);
+    return reply || params.fallback;
+  } catch (error) {
+    console.error("AARYVO commerce sales reply error", error);
+    return params.fallback;
+  }
+}
+
 export async function POST(request: Request) {
   const headers = corsHeadersFor(request);
 
@@ -545,10 +607,18 @@ export async function POST(request: Request) {
         }
 
         if (shopifyProducts.length) {
-          commerceReply = buildCommerceProductReply({
+          const fallbackReply = buildCommerceProductReply({
             products: shopifyProducts,
             alternative: false,
             requestedCount: commerceState.requestedCount,
+          });
+          commerceReply = await generateCommerceSalesReply({
+            message,
+            searchQuery: commerceState.searchQuery,
+            products: shopifyProducts,
+            alternative: false,
+            recentMessages,
+            fallback: fallbackReply,
           });
           commerceUi = buildCommerceRefinementUi(
             shopifyProducts,
@@ -594,10 +664,18 @@ export async function POST(request: Request) {
             }
 
             if (shopifyProducts.length) {
-              commerceReply = buildCommerceProductReply({
+              const fallbackReply = buildCommerceProductReply({
                 products: shopifyProducts,
                 alternative: true,
                 requestedCount: commerceState.requestedCount,
+              });
+              commerceReply = await generateCommerceSalesReply({
+                message,
+                searchQuery: commerceState.searchQuery,
+                products: shopifyProducts,
+                alternative: true,
+                recentMessages,
+                fallback: fallbackReply,
               });
               commerceUi = buildCommerceRefinementUi(
                 shopifyProducts,
