@@ -153,7 +153,7 @@ export async function POST(request: Request) {
     const message = typeof body.message === "string" ? body.message.trim() : "";
     if (!agentId || !visitorId || !conversationId || !message || message.length > 3000) return NextResponse.json({ error: "Invalid request." }, { status: 400, headers });
 
-    const agent = await prisma.agent.findFirst({ where: { id: agentId, isActive: true }, include: { business: true, knowledgeItems: { orderBy: { createdAt: "asc" } } } });
+    const agent = await prisma.agent.findFirst({ where: { id: agentId, isActive: true }, include: { business: true, knowledgeItems: { where: { NOT: { source: { startsWith: "shopify://" } } }, orderBy: { createdAt: "asc" } } } });
     if (!agent) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
     if (!isAllowedWidgetOrigin(request, agent.business.websiteUrl)) return NextResponse.json({ error: "This website is not authorized to use this AARYVO agent." }, { status: 403, headers });
     const shopifyEnabled = hasFeature(agent.business.plan, "shopifyIntegration");
@@ -191,14 +191,14 @@ export async function POST(request: Request) {
 
       if (isShopifyCommerceQuery(commerceSearchQuery)) {
         try {
-          shopifyProducts = await searchShopifyCatalog(agent.businessId, commerceSearchQuery, 8);
+          shopifyProducts = await searchShopifyCatalog(agent.businessId, commerceSearchQuery, 8, agent.id);
 
           // If the refined query is too restrictive, fall back to the strongest
           // recent shopping request so the customer still sees useful products.
           if (!shopifyProducts.length && commerceSearchQuery !== message) {
             for (const candidate of previousUserMessages.slice(-3).reverse()) {
               if (!isShopifyCommerceQuery(candidate)) continue;
-              shopifyProducts = await searchShopifyCatalog(agent.businessId, candidate, 8);
+              shopifyProducts = await searchShopifyCatalog(agent.businessId, candidate, 8, agent.id);
               if (shopifyProducts.length) break;
             }
           }
@@ -225,6 +225,23 @@ export async function POST(request: Request) {
       input: recentMessages.map((i) => ({ role: i.role === "assistant" ? "assistant" as const : "user" as const, content: i.content })),
     });
     const parsed = richEnabled ? parseRichResponse(response.output_text || "") : { reply: (response.output_text || "").trim().slice(0, 4000) || "I’m unable to answer that right now. Would you like a human follow-up?", ui: null };
+
+    const commerceChipValues = shopifyProducts.length
+      ? [...new Set(shopifyProducts.map((product) => product.productType).filter(Boolean) as string[])].slice(0, 5)
+      : (shopifyOverview?.productTypes || []).slice(0, 5);
+
+    const commerceUi: RichUi | null =
+      richEnabled && shopifyOverview && commerceChipValues.length
+        ? {
+            type: "chips",
+            options: commerceChipValues.map((value) => ({
+              label: value,
+              value: `Show me ${value}`,
+            })),
+          }
+        : null;
+
+    const resolvedUi = richEnabled ? (parsed.ui || commerceUi) : null;
     const reply = parsed.reply;
     await prisma.message.create({ data: { conversationId: conversation.id, role: "assistant", content: reply } });
 
@@ -248,7 +265,7 @@ export async function POST(request: Request) {
       conversationId: conversation.id,
       businessName: agent.business.name,
       reply,
-      ui: richEnabled ? parsed.ui : null,
+      ui: resolvedUi,
       products: shopifyProducts.slice(0, 4).map((product) => ({
         id: product.id,
         title: product.title,
