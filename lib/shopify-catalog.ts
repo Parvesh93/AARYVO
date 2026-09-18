@@ -164,47 +164,40 @@ export async function getShopifyCatalogOverview(
 
   const activeWhere = { storeId: store.id, status: "ACTIVE" as const };
 
-  // Keep this overview intentionally simple and adapter-safe. It runs on every
-  // widget chat, so avoid expensive GROUP BY queries that can fail on some
-  // MySQL/MariaDB adapter combinations.
-  const [productCount, typeRows, vendorRows, priceStats, currencyRow] = await Promise.all([
+  // Use simple reads only here because this function runs on every chat request.
+  // Avoid adapter-sensitive GROUP BY / DISTINCT queries on production MariaDB.
+  const [productCount, sample, priceStats] = await Promise.all([
     prisma.shopifyProduct.count({ where: activeWhere }),
     prisma.shopifyProduct.findMany({
-      where: { ...activeWhere, productType: { not: null } },
-      select: { productType: true },
-      distinct: ["productType"],
-      take: 40,
-    }),
-    prisma.shopifyProduct.findMany({
-      where: { ...activeWhere, vendor: { not: null } },
-      select: { vendor: true },
-      distinct: ["vendor"],
-      take: 30,
+      where: activeWhere,
+      select: {
+        productType: true,
+        vendor: true,
+        currencyCode: true,
+      },
+      take: 500,
     }),
     prisma.shopifyProduct.aggregate({
       where: activeWhere,
       _min: { minPrice: true },
       _max: { maxPrice: true },
     }),
-    prisma.shopifyProduct.findFirst({
-      where: { ...activeWhere, currencyCode: { not: null } },
-      select: { currencyCode: true },
-    }),
   ]);
 
-  const productTypes = typeRows
-    .map((item) => item.productType?.trim())
-    .filter(Boolean) as string[];
-  const vendors = vendorRows
-    .map((item) => item.vendor?.trim())
-    .filter(Boolean) as string[];
+  const productTypes = [...new Set(
+    sample.map((item) => item.productType?.trim()).filter(Boolean) as string[],
+  )].slice(0, 40);
+
+  const vendors = [...new Set(
+    sample.map((item) => item.vendor?.trim()).filter(Boolean) as string[],
+  )].slice(0, 30);
 
   return {
     shopDomain: store.shopDomain,
     productCount,
     productTypes,
     vendors,
-    currencyCode: currencyRow?.currencyCode || null,
+    currencyCode: sample.find((item) => item.currencyCode)?.currencyCode || null,
     minPrice: priceStats._min.minPrice ?? null,
     maxPrice: priceStats._max.maxPrice ?? null,
   };
