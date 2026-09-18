@@ -3,7 +3,7 @@ import dns from "node:dns/promises";
 import net from "node:net";
 
 const MAX_PAGES = 8;
-const MAX_HTML_BYTES = 1_500_000;
+const MAX_HTML_BYTES = 5_000_000;
 const MAX_TEXT_CHARS = 40_000;
 
 export type CrawledPage = {
@@ -32,6 +32,48 @@ async function assertSafeUrl(input: string) {
   return url;
 }
 
+async function readHtmlLimited(response: Response) {
+  if (!response.body) {
+    const html = await response.text();
+    return Buffer.byteLength(html, "utf8") > MAX_HTML_BYTES
+      ? html.slice(0, MAX_HTML_BYTES)
+      : html;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let totalBytes = 0;
+  let html = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value?.byteLength) continue;
+
+      const remaining = MAX_HTML_BYTES - totalBytes;
+      if (remaining <= 0) break;
+
+      const chunk =
+        value.byteLength > remaining ? value.slice(0, remaining) : value;
+
+      totalBytes += chunk.byteLength;
+      html += decoder.decode(chunk, { stream: true });
+
+      if (value.byteLength > remaining || totalBytes >= MAX_HTML_BYTES) break;
+    }
+  } finally {
+    if (totalBytes >= MAX_HTML_BYTES) {
+      try {
+        await reader.cancel();
+      } catch {}
+    }
+  }
+
+  html += decoder.decode();
+  return html;
+}
+
 async function fetchHtml(url: URL, allowedHostname: string) {
   let current = url;
   for (let redirectCount = 0; redirectCount <= 3; redirectCount++) {
@@ -54,10 +96,8 @@ async function fetchHtml(url: URL, allowedHostname: string) {
     if (!response.ok) throw new Error(`Website returned HTTP ${response.status}.`);
     const type = response.headers.get("content-type") || "";
     if (!type.includes("text/html")) throw new Error("The page is not HTML.");
-    const declaredLength = Number(response.headers.get("content-length") || 0);
-    if (declaredLength > MAX_HTML_BYTES) throw new Error("Page is too large to scan safely.");
-    const html = await response.text();
-    if (Buffer.byteLength(html, "utf8") > MAX_HTML_BYTES) throw new Error("Page is too large to scan safely.");
+    const html = await readHtmlLimited(response);
+    if (!html.trim()) throw new Error("The page returned no readable HTML.");
     return { html, finalUrl: current };
   }
   throw new Error("Website redirected too many times.");
