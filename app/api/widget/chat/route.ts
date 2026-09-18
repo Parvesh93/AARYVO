@@ -18,6 +18,7 @@ import {
 import {
   buildCommerceClarification,
   buildCommerceProductReply,
+  buildCommerceRecommendationQuery,
   buildCommerceRefinementUi,
   deriveCommerceState,
   desiredCommerceProductCount,
@@ -338,6 +339,65 @@ function uniqueProducts(products: ShopifyCatalogProduct[]) {
   });
 }
 
+function diversifyProducts(
+  products: ShopifyCatalogProduct[],
+  desired: number,
+) {
+  const available = uniqueProducts(
+    products.filter((product) => product.availableForSale),
+  );
+  const output: ShopifyCatalogProduct[] = [];
+  const used = new Set<string>();
+
+  // First pass: one strong option from each product type.
+  for (const product of available) {
+    const key = (product.productType || product.vendor || product.title)
+      .trim()
+      .toLowerCase();
+    if (!key || used.has(key)) continue;
+    used.add(key);
+    output.push(product);
+    if (output.length >= desired) return output;
+  }
+
+  // Second pass: fill remaining slots by original relevance order.
+  for (const product of available) {
+    if (output.some((item) => item.id === product.id)) continue;
+    output.push(product);
+    if (output.length >= desired) break;
+  }
+
+  return output;
+}
+
+async function broadenAvailableSelection(params: {
+  businessId: string;
+  agentId: string;
+  current: ShopifyCatalogProduct[];
+  desired: number;
+}) {
+  let output = uniqueProducts(
+    params.current.filter((product) => product.availableForSale),
+  );
+
+  try {
+    const broad = await searchShopifyCatalog(
+      params.businessId,
+      "products available",
+      12,
+      params.agentId,
+    );
+    output = uniqueProducts([
+      ...output,
+      ...broad.filter((product) => product.availableForSale),
+    ]);
+  } catch (error) {
+    console.error("AARYVO broad available product search error", error);
+  }
+
+  return diversifyProducts(output, params.desired);
+}
+
 async function fillWithAvailableAlternatives(params: {
   businessId: string;
   agentId: string;
@@ -631,6 +691,17 @@ export async function POST(request: Request) {
             flexible: false,
             broad: false,
             specificProductIntent: false,
+            intent: {
+              category: null,
+              recipient: null,
+              age: null,
+              occasion: null,
+              budgetMax: null,
+              style: null,
+              colors: [],
+              sizes: [],
+              materials: [],
+            },
           };
 
     let shopifyProducts: ShopifyCatalogProduct[] = [];
@@ -651,15 +722,30 @@ export async function POST(request: Request) {
         commerceReply = clarification.reply;
         commerceUi = clarification.ui;
       } else {
+        const recommendationQuery = buildCommerceRecommendationQuery(
+          commerceState,
+        );
+
         try {
           shopifyProducts = await searchShopifyCatalog(
             agent.businessId,
-            commerceState.searchQuery,
+            recommendationQuery,
             Math.min(Math.max(desired, 8), 10),
             agent.id,
           );
         } catch (error) {
           console.error("AARYVO Shopify exact product search error", error);
+        }
+
+        // Broad gifting/discovery should not collapse into one category just
+        // because that category happens to contain the strongest keyword hit.
+        if (commerceState.broad && !commerceState.intent.category) {
+          shopifyProducts = await broadenAvailableSelection({
+            businessId: agent.businessId,
+            agentId: agent.id,
+            current: shopifyProducts,
+            desired: Math.min(commerceState.requestedCount || 8, 10),
+          });
         }
 
         if (shopifyProducts.length) {
@@ -704,7 +790,7 @@ export async function POST(request: Request) {
             });
             commerceReply = await generateCommerceSalesReply({
               message,
-              searchQuery: commerceState.searchQuery,
+              searchQuery: buildCommerceRecommendationQuery(commerceState),
               products: shopifyProducts,
               alternative: alternativeProducts,
               recentMessages,
@@ -712,7 +798,7 @@ export async function POST(request: Request) {
             });
             commerceUi = buildCommerceRefinementUi(
               shopifyProducts,
-              commerceState.searchQuery,
+              buildCommerceRecommendationQuery(commerceState),
             );
           } else {
             commerceReply =
