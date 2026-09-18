@@ -285,7 +285,7 @@ function visitorRequestsHuman(message: string) {
 }
 
 function visitorRequestsBooking(message: string) {
-  return /\b(book|schedule|appointment|consultation|consult|meeting|demo|call)\b.{0,40}\b(appointment|consultation|meeting|demo|call|slot|time)?\b/i.test(
+  return /(?:\b(?:book|schedule)\b.{0,35}\b(?:consultation|appointment|call|meeting|demo|slot)\b|\b(?:consultation|appointment|meeting|demo)\b)/i.test(
     message,
   );
 }
