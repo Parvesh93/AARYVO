@@ -1,0 +1,2 @@
+ALTER TABLE `agent`
+ADD COLUMN `widgetConversationMode` VARCHAR(191) NOT NULL DEFAULT 'LEAD_FIRST';
