@@ -548,11 +548,19 @@ export function buildShopifyCatalogContext(products: ShopifyCatalogProduct[]) {
           ? `${product.currencyCode || ""} ${product.minPrice}`
           : `${product.currencyCode || ""} ${product.minPrice}–${product.maxPrice}`;
 
-    const variants = product.variants
+    const meaningfulVariants = product.variants.filter((variant) => {
+      const title = (variant.title || "").trim();
+      const summary = (variant.optionSummary || "").trim();
+      return !/^(default title|default)$/i.test(title) || Boolean(summary);
+    });
+
+    const variants = meaningfulVariants
       .slice(0, 8)
       .map((variant) =>
         [
-          variant.title,
+          variant.title && !/^(default title|default)$/i.test(variant.title)
+            ? variant.title
+            : null,
           variant.price == null ? null : `${product.currencyCode || ""} ${variant.price}`,
           variant.availableForSale ? "available" : "sold out",
           variant.optionSummary || null,
@@ -569,7 +577,9 @@ export function buildShopifyCatalogContext(products: ShopifyCatalogProduct[]) {
       `AVAILABILITY: ${product.availableForSale ? "Available" : "Sold out"}`,
       `TAGS: ${product.tags || "N/A"}`,
       `DESCRIPTION: ${product.description || "N/A"}`,
-      variants ? `VARIANTS: ${variants}` : null,
+      variants
+        ? `SELECTABLE VARIANTS: ${variants}`
+        : "SELECTABLE VARIANTS: None shown in synced Shopify data. Do not call Default Title a size or option.",
       product.knowledge ? `RICH SHOPIFY KNOWLEDGE:\n${product.knowledge.slice(0, 7000)}` : null,
       product.url ? `URL: ${product.url}` : null,
     ].filter(Boolean).join("\n");
