@@ -546,6 +546,10 @@ export async function POST(request: Request) {
       typeof body.conversationId === "string" ? body.conversationId : null;
     const message =
       typeof body.message === "string" ? body.message.trim() : "";
+    const pageUrl =
+      typeof body.pageUrl === "string" ? body.pageUrl.slice(0, 2000) : "";
+    const pageTitle =
+      typeof body.pageTitle === "string" ? body.pageTitle.slice(0, 300) : "";
 
     if (
       !agentId ||
