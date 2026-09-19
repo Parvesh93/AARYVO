@@ -132,6 +132,7 @@ export type ShopifyCatalogProduct = {
   availableForSale: boolean;
   variants: Array<{
     id: string;
+    shopifyVariantId: string;
     title: string;
     price: number | null;
     compareAtPrice: number | null;
@@ -170,6 +171,7 @@ type ShopifyProductSearchRow = {
   syncedAt: Date;
   variants: Array<{
     id: string;
+    shopifyVariantId: string;
     title: string;
     price: number | null;
     compareAtPrice: number | null;
@@ -402,6 +404,7 @@ export async function searchShopifyCatalog(
     availableForSale: product.variants.some((variant) => variant.availableForSale),
     variants: product.variants.map((variant) => ({
       id: variant.id,
+      shopifyVariantId: variant.shopifyVariantId,
       title: variant.title,
       price: variant.price,
       compareAtPrice: variant.compareAtPrice,
@@ -411,6 +414,70 @@ export async function searchShopifyCatalog(
     })),
     knowledge: knowledgeByShopifyId.get(product.shopifyProductId) || null,
   }));
+}
+
+export async function getShopifyProductFromPage(
+  businessId: string,
+  pageUrl: string,
+): Promise<ShopifyCatalogProduct | null> {
+  const store = await connectedStore(businessId);
+  if (!store || store.status !== "CONNECTED") return null;
+
+  let handle = "";
+  try {
+    const url = new URL(pageUrl);
+    const match = url.pathname.match(/\/products\/([^/?#]+)/i);
+    handle = match?.[1] ? decodeURIComponent(match[1]) : "";
+  } catch {}
+
+  if (!handle) return null;
+
+  const product = await prisma.shopifyProduct.findFirst({
+    where: {
+      storeId: store.id,
+      status: "ACTIVE",
+      handle,
+    },
+    include: {
+      variants: {
+        orderBy: { price: "asc" },
+        take: 24,
+      },
+    },
+  }) as ShopifyProductSearchRow | null;
+
+  if (!product) return null;
+
+  return {
+    id: product.id,
+    title: product.title,
+    description: (product.description || "").replace(/\s+/g, " ").trim().slice(0, 420),
+    vendor: product.vendor,
+    productType: product.productType,
+    tags: product.tags,
+    imageUrl: product.featuredImageUrl,
+    url: safeStorefrontUrl(
+      store.business.websiteUrl,
+      store.shopDomain,
+      product.handle,
+      product.onlineStoreUrl,
+    ),
+    minPrice: product.minPrice,
+    maxPrice: product.maxPrice,
+    currencyCode: product.currencyCode,
+    availableForSale: product.variants.some((variant) => variant.availableForSale),
+    variants: product.variants.map((variant) => ({
+      id: variant.id,
+      shopifyVariantId: variant.shopifyVariantId,
+      title: variant.title,
+      price: variant.price,
+      compareAtPrice: variant.compareAtPrice,
+      availableForSale: variant.availableForSale,
+      inventoryQuantity: variant.inventoryQuantity,
+      optionSummary: variant.optionSummary,
+    })),
+    knowledge: null,
+  };
 }
 
 export function buildShopifyOverviewContext(overview: ShopifyCatalogOverview | null) {
