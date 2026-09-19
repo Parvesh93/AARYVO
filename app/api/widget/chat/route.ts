@@ -863,7 +863,7 @@ export async function POST(request: Request) {
       }
     }
 
-    let alternativeProducts = false;
+    
     let commerceUi: RichUi | null = null;
     let commerceReply: string | null = null;
 
