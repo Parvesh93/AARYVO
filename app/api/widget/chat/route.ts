@@ -494,6 +494,7 @@ async function generateCurrentProductReply(params: {
       instructions: `You are an ecommerce product specialist answering a question about the exact Shopify product the visitor is currently viewing.
 Use ONLY the supplied live Shopify facts. Never invent a size, colour, material, occasion, discount, stock status or feature.
 Answer the customer's exact question first. If a requested option is not present in the supplied variants/tags, say you cannot confirm it from the current catalogue data.
+"Default Title" is Shopify's internal fallback variant, not a customer-selectable size, colour or option. Never mention "Default Title" to the customer. If SELECTABLE VARIANTS says none, explain naturally that no selectable size/option is shown in the synced Shopify data.
 Keep the answer concise: 1-3 sentences. Do not output JSON.`,
       input: `CUSTOMER QUESTION:
 ${params.message}
@@ -521,6 +522,7 @@ async function generateProductComparisonReply(params: {
       instructions: `You are an ecommerce product comparison assistant.
 Compare ONLY the supplied live Shopify facts. Do not invent quality, suitability, material, popularity or features.
 Focus on concrete differences such as price, availability, product type, tags, description and variants.
+Never expose Shopify's internal "Default Title" fallback as a customer-selectable variant. If no selectable variants are supplied, say no selectable size/option is shown in the synced catalogue.
 If the customer asks which is better, explain which product matches a stated requirement; if no requirement is known, explain the differences without declaring an unsupported winner.
 Keep it concise and useful: 2-4 sentences. Do not output JSON.`,
       input: `CUSTOMER REQUEST:
@@ -570,6 +572,7 @@ Rules:
 - Mention one or two actual product names when that helps the recommendation.
 - Briefly explain why they fit using only supplied title, description, tags, variants, availability or price.
 - Do NOT invent gifting suitability, material, features, discounts or availability.
+- Never describe Shopify "Default Title" as a size, colour or selectable option.
 - If these are alternatives rather than exact matches, say that naturally.
 - Products are already being displayed below, so never say you cannot show listings.
 - Do not ask another generic budget/style/occasion question after products are shown.
