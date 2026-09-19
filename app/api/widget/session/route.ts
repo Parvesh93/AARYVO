@@ -27,19 +27,41 @@ export async function POST(request: Request) {
     if (!agent) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
     if (!isAllowedWidgetOrigin(request, agent.business.websiteUrl)) return NextResponse.json({ error: "Unauthorized website." }, { status: 403, headers });
 
+    const SESSION_WINDOW_MS = 30 * 60 * 1000;
+    const activeSince = new Date(Date.now() - SESSION_WINDOW_MS);
+
+    const includeConversation = {
+      lead: true,
+      messages: { orderBy: { createdAt: "asc" as const }, take: 40 },
+    };
+
     let conversation = requestedConversationId
       ? await prisma.conversation.findFirst({
           where: { id: requestedConversationId, agentId, visitorId },
-          include: { lead: true, messages: { orderBy: { createdAt: "asc" }, take: 40 } },
+          include: includeConversation,
         })
       : null;
 
+    if (conversation) {
+      const lastActivity =
+        conversation.messages[conversation.messages.length - 1]?.createdAt ||
+        conversation.startedAt;
+      if (lastActivity < activeSince) conversation = null;
+    }
+
     if (!conversation) {
-      conversation = await prisma.conversation.findFirst({
+      const candidate = await prisma.conversation.findFirst({
         where: { agentId, visitorId },
         orderBy: { startedAt: "desc" },
-        include: { lead: true, messages: { orderBy: { createdAt: "asc" }, take: 40 } },
+        include: includeConversation,
       });
+
+      if (candidate) {
+        const lastActivity =
+          candidate.messages[candidate.messages.length - 1]?.createdAt ||
+          candidate.startedAt;
+        if (lastActivity >= activeSince) conversation = candidate;
+      }
     }
 
     if (conversation) {
@@ -52,7 +74,23 @@ export async function POST(request: Request) {
     }
 
     if (agent.widgetConversationMode !== "CONVERSATION_FIRST") {
-      return NextResponse.json({ restored: false, requiresContact: true }, { headers });
+      const previous = await prisma.conversation.findFirst({
+        where: { agentId, visitorId, lead: { isNot: null } },
+        orderBy: { startedAt: "desc" },
+        include: { lead: true },
+      });
+
+      return NextResponse.json({
+        restored: false,
+        requiresContact: true,
+        previousContact: previous?.lead
+          ? {
+              name: previous.lead.name || "",
+              email: previous.lead.email || "",
+              phone: previous.lead.phone || "",
+            }
+          : null,
+      }, { headers });
     }
 
     const quota = await getBusinessConversationUsage(agent.businessId);
