@@ -121,6 +121,7 @@ model Agent {
   widgetLauncherAnimation String @default("PULSE")
   widgetLauncherLabelEnabled Boolean @default(true)
   widgetShowPoweredBy Boolean @default(true)
+  widgetConversationMode String @default("LEAD_FIRST")
   isActive Boolean @default(true)
   business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
   conversations Conversation[]
