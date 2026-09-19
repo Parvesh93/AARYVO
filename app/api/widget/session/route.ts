@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getWidgetRichMessages } from "@/lib/widget-rich-history";
 import { getBusinessConversationUsage } from "@/lib/billing";
 import { corsHeadersFor, isAllowedWidgetOrigin, rateLimitWidget } from "@/lib/widget-security";
 
@@ -65,11 +66,26 @@ export async function POST(request: Request) {
     }
 
     if (conversation) {
+      let richByMessage = new Map<string, { ui: unknown; products: unknown[] }>();
+      try {
+        richByMessage = await getWidgetRichMessages(conversation.id);
+      } catch (error) {
+        console.error("AARYVO rich history restore error", error);
+      }
+
       return NextResponse.json({
         conversationId: conversation.id,
         restored: true,
         lead: conversation.lead ? { id: conversation.lead.id, name: conversation.lead.name, email: conversation.lead.email, phone: conversation.lead.phone, status: conversation.lead.status, score: conversation.lead.score } : null,
-        messages: conversation.messages.map((message) => ({ role: message.role, content: message.content })),
+        messages: conversation.messages.map((message) => {
+          const rich = richByMessage.get(message.id);
+          return {
+            role: message.role,
+            content: message.content,
+            ui: rich?.ui || null,
+            products: rich?.products || [],
+          };
+        }),
       }, { headers });
     }
 
