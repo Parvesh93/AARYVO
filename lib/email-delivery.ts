@@ -1,7 +1,7 @@
 import nodemailer from "nodemailer";
 import { prisma } from "@/lib/prisma";
 import { decryptToken } from "@/lib/token-crypto";
-import { createEmailLog, markEmailFailed, markEmailSent } from "@/lib/email-analytics";
+import { createEmailLog, markEmailFailed, markEmailSent, signEmailClick } from "@/lib/email-analytics";
 
 type MailConfig = {
   transporter: ReturnType<typeof nodemailer.createTransport>;
@@ -100,8 +100,11 @@ function addTracking(html: string, id: string) {
     (all, q, url) => {
       try {
         const parsed = new URL(url);
-        if (parsed.origin !== new URL(base).origin) return all;
-        return `href=${q}${base}/api/email/track/click/${id}?url=${encodeURIComponent(url)}${q}`;
+        if (!["http:", "https:"].includes(parsed.protocol)) return all;
+        if (parsed.pathname.startsWith("/api/email/track/")) return all;
+        const signature = signEmailClick(id, parsed.toString());
+        if (!signature) return all;
+        return `href=${q}${base}/api/email/track/click/${id}?url=${encodeURIComponent(parsed.toString())}&sig=${encodeURIComponent(signature)}${q}`;
       } catch {
         return all;
       }
