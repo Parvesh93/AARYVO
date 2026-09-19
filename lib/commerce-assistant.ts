@@ -100,14 +100,20 @@ function extractIntent(
 
   let category: string | null = null;
   const productTypes = overview?.productTypes || [];
-  const matchedType = productTypes.find(
-    (type) => phraseIn(text, type) || phraseIn(type, text),
-  );
-  if (matchedType) {
-    category = matchedType;
-  } else {
+
+  // Prefer the most recent user message that names a product/category.
+  // This prevents an older request such as "trousers" from overriding a
+  // later request such as "necklaces" during the same conversation.
+  for (let index = userMessages.length - 1; index >= 0 && !category; index--) {
+    const message = userMessages[index];
+    const normalizedMessage = normalize(message);
+    const matchedType = productTypes.find(
+      (type) => phraseIn(message, type) || phraseIn(type, message),
+    );
     category =
-      CATEGORY_TERMS.find((term) => phraseIn(normalized, term)) || null;
+      matchedType ||
+      CATEGORY_TERMS.find((term) => phraseIn(normalizedMessage, term)) ||
+      null;
   }
 
   let recipient: CommerceIntent["recipient"] = null;
@@ -347,7 +353,22 @@ export function deriveCommerceState(params: {
     .filter(Boolean)
     .filter((item) => !isFlexibleCommerceAnswer(item));
 
-  const searchQuery = [...new Set(userParts)].join(" ").trim() || baseIntent;
+  // The current request must dominate catalogue search. Older user turns are
+  // useful for recipient/budget context, but mixing old product categories
+  // into the search can produce stale recommendations.
+  const currentCategoryMessage = [...userParts]
+    .reverse()
+    .find((part) =>
+      CATEGORY_TERMS.some((term) => phraseIn(normalize(part), term)) ||
+      (overview?.productTypes || []).some(
+        (type) => phraseIn(part, type) || phraseIn(type, part),
+      ),
+    );
+  const searchQuery =
+    currentCategoryMessage ||
+    currentMessage.trim() ||
+    [...new Set(userParts)].join(" ").trim() ||
+    baseIntent;
 
   const clarificationCount =
     baseIndex >= 0
