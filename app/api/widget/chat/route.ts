@@ -917,7 +917,11 @@ export async function POST(request: Request) {
             (product) => product.availableForSale,
           );
 
-          if (inStockMatches.length < desiredCount) {
+          const strictCategoryRequest =
+            Boolean(commerceState.intent.category) ||
+            (commerceState.specificProductIntent && !commerceState.broad);
+
+          if (inStockMatches.length < desiredCount && !strictCategoryRequest) {
             shopifyProducts = await fillWithAvailableAlternatives({
               businessId: agent.businessId,
               agentId: agent.id,
@@ -927,6 +931,9 @@ export async function POST(request: Request) {
               desired: desiredCount,
             });
           } else {
+            // For a specific category/product request, relevance is more
+            // important than filling the carousel. Never pad Earrings with
+            // dresses, Tops, etc. just to hit the desired result count.
             shopifyProducts = inStockMatches.slice(0, desiredCount);
           }
 
@@ -975,10 +982,19 @@ export async function POST(request: Request) {
             commerceReply = clarification.reply;
             commerceUi = clarification.ui;
           } else {
-            const fallbackQueries = [
-              commerceState.baseIntent,
-              "products",
-            ].filter(Boolean);
+            const strictFallback =
+              Boolean(commerceState.intent.category) ||
+              (commerceState.specificProductIntent && !commerceState.broad);
+
+            const fallbackQueries = strictFallback
+              ? [
+                  buildCommerceRecommendationQuery(commerceState),
+                  commerceState.baseIntent,
+                ].filter(Boolean)
+              : [
+                  commerceState.baseIntent,
+                  "products",
+                ].filter(Boolean);
 
             for (const fallbackQuery of fallbackQueries) {
               try {
