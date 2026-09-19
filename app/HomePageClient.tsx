@@ -12,7 +12,7 @@ const features = [
 
 const plans = [
   { name: "Free", price: "₹0", usage: "50 conversations / month", note: "Explore the core AARYVO experience", features: ["AI website agent", "Website knowledge training", "Lead capture", "Conversation inbox", "Basic lead details", "AARYVO branding"] },
-  { name: "Starter", price: "₹999", usage: "500 conversations / month", note: "For businesses ready to capture more leads", features: ["Everything in Free", "AI lead qualification", "Hot & warm lead scoring", "Appointment capture", "Email lead alerts", "WhatsApp & human handoff", "Conversation history"], popular: true },
+  { name: "Starter", price: "₹999", usage: "500 conversations / month", note: "For businesses ready to capture more leads", features: ["Everything in Free", "AI lead qualification", "Hot & warm lead scoring", "Appointment capture", "Email lead alerts", "WhatsApp & human handoff", "Shopify integration", "Conversation history"], popular: true },
   { name: "Growth", price: "₹2,499", usage: "2,000 conversations / month", note: "For teams turning AI into a sales channel", features: ["Everything in Starter", "Follow-up workflow", "Custom widget branding", "Advanced widget controls", "Custom launcher & animations", "Custom email sender / SMTP", "Rich AI responses & actions", "Priority support"] },
   { name: "Pro", price: "₹4,999", usage: "5,000 conversations / month", note: "For high-volume websites and growing teams", features: ["Everything in Growth", "5,000 monthly conversations", "Full sales workflow toolkit", "Highest usage allowance", "Premium support", "Priority product assistance", "Early access to new capabilities"] },
 ];
@@ -27,6 +27,7 @@ const comparison = [
   ["Appointment capture", false, true, true, true],
   ["Email lead alerts", false, true, true, true],
   ["WhatsApp / human handoff", false, true, true, true],
+  ["Shopify integration", false, true, true, true],
   ["Follow-up workflow", false, false, true, true],
   ["Custom widget branding", false, false, true, true],
   ["Advanced launcher controls", false, false, true, true],
