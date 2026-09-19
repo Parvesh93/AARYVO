@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { saveWidgetRichMessage } from "@/lib/widget-rich-history";
 import { sendHumanAttentionNotification } from "@/lib/notifications";
 import { hasFeature } from "@/lib/plan-entitlements";
 import {
@@ -1033,7 +1034,7 @@ Reply with conversational text only. Do not output JSON or interactive UI.`;
           ? parsed.ui
           : null;
 
-    await prisma.message.create({
+    const assistantMessage = await prisma.message.create({
       data: {
         conversationId: conversation.id,
         role: "assistant",
@@ -1122,13 +1123,25 @@ Reply with conversational text only. Do not output JSON or interactive UI.`;
       shopifyProducts.length,
     );
 
+    const responseProducts = productPayload(shopifyProducts.slice(0, productLimit));
+    try {
+      await saveWidgetRichMessage({
+        messageId: assistantMessage.id,
+        conversationId: conversation.id,
+        ui: resolvedUi,
+        products: responseProducts,
+      });
+    } catch (error) {
+      console.error("AARYVO rich message persistence error", error);
+    }
+
     return NextResponse.json(
       {
         conversationId: conversation.id,
         businessName: agent.business.name,
         reply,
         ui: resolvedUi,
-        products: productPayload(shopifyProducts.slice(0, productLimit)),
+        products: responseProducts,
         commerce: commerceState.active
           ? {
               active: true,
