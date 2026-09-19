@@ -637,9 +637,17 @@ export async function POST(request: Request) {
       include: { lead: true },
     });
 
+    if (!conversation) {
+      return NextResponse.json(
+        { error: "Conversation not found." },
+        { status: 404, headers },
+      );
+    }
+
     if (
-      !conversation?.lead?.name ||
-      (!conversation.lead.phone && !conversation.lead.email)
+      agent.widgetConversationMode !== "CONVERSATION_FIRST" &&
+      (!conversation.lead?.name ||
+        (!conversation.lead.phone && !conversation.lead.email))
     ) {
       return NextResponse.json(
         { error: "Please complete the contact form before chatting." },
