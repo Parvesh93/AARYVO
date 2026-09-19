@@ -40,6 +40,7 @@ export async function PATCH(request: Request) {
     widgetLauncherAnimation: ["PULSE", "BOUNCE", "GLOW", "NONE"].includes(body.launcherAnimation) ? body.launcherAnimation : "PULSE",
     widgetLauncherLabelEnabled: body.launcherLabelEnabled !== false,
     widgetShowPoweredBy: body.showPoweredBy !== false,
+    widgetConversationMode: body.conversationMode === "CONVERSATION_FIRST" ? "CONVERSATION_FIRST" : "LEAD_FIRST",
   };
   await prisma.agent.update({ where: { id: agent.id }, data });
   return NextResponse.json({ ok: true });
