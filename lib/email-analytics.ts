@@ -1,4 +1,4 @@
-import { randomUUID } from "crypto";
+import { createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 
 let ready: Promise<void> | null = null;
@@ -30,6 +30,15 @@ export function ensureEmailAnalyticsTable() {
       const names = new Set(cols.map((v) => v.COLUMN_NAME));
       if (!names.has("textBody")) await prisma.$executeRawUnsafe(`ALTER TABLE platform_email_log ADD COLUMN textBody LONGTEXT NULL AFTER errorMessage`);
       if (!names.has("htmlBody")) await prisma.$executeRawUnsafe(`ALTER TABLE platform_email_log ADD COLUMN htmlBody LONGTEXT NULL AFTER textBody`);
+
+      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS platform_email_click (
+        id VARCHAR(191) PRIMARY KEY,
+        emailId VARCHAR(191) NOT NULL,
+        url VARCHAR(2048) NOT NULL,
+        clickedAt DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+        INDEX idx_email_click_email(emailId),
+        INDEX idx_email_click_clicked(clickedAt)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`);
     })();
   }
   return ready;
@@ -53,7 +62,37 @@ export async function createEmailLog(input: {
 export async function markEmailSent(id:string){await ensureEmailAnalyticsTable();await prisma.$executeRawUnsafe(`UPDATE platform_email_log SET status='SENT',sentAt=NOW(3) WHERE id=?`,id)}
 export async function markEmailFailed(id:string,error:unknown){await ensureEmailAnalyticsTable();await prisma.$executeRawUnsafe(`UPDATE platform_email_log SET status='FAILED',errorMessage=? WHERE id=?`,String(error instanceof Error?error.message:error).slice(0,4000),id)}
 export async function markEmailOpened(id:string){await ensureEmailAnalyticsTable();await prisma.$executeRawUnsafe(`UPDATE platform_email_log SET openedAt=COALESCE(openedAt,NOW(3)),openCount=openCount+1 WHERE id=?`,id)}
-export async function markEmailClicked(id:string){await ensureEmailAnalyticsTable();await prisma.$executeRawUnsafe(`UPDATE platform_email_log SET clickedAt=COALESCE(clickedAt,NOW(3)),clickCount=clickCount+1 WHERE id=?`,id)}
+export async function markEmailClicked(id:string,url?:string|null){
+  await ensureEmailAnalyticsTable();
+  await prisma.$executeRawUnsafe(`UPDATE platform_email_log SET clickedAt=COALESCE(clickedAt,NOW(3)),clickCount=clickCount+1 WHERE id=?`,id);
+  if(url){
+    await prisma.$executeRawUnsafe(
+      `INSERT INTO platform_email_click(id,emailId,url,clickedAt) VALUES(?,?,?,NOW(3))`,
+      randomUUID(),
+      id,
+      url.slice(0,2048),
+    );
+  }
+}
+
+function trackingSecret(){
+  return process.env.AUTH_SECRET || process.env.INTEGRATION_ENCRYPTION_KEY || "";
+}
+
+export function signEmailClick(id:string,url:string){
+  const secret=trackingSecret();
+  if(!secret)return "";
+  return createHmac("sha256",secret).update(`${id}|${url}`).digest("base64url");
+}
+
+export function verifyEmailClick(id:string,url:string,signature:string|null){
+  const secret=trackingSecret();
+  if(!secret||!signature)return false;
+  const expected=signEmailClick(id,url);
+  const a=Buffer.from(signature);
+  const b=Buffer.from(expected);
+  return a.length===b.length&&timingSafeEqual(a,b);
+}
 
 function safeDays(value:number|undefined){return Math.max(1,Math.min(365,Math.floor(value||30)))}
 function optionalClause(category?:string|null,source?:string|null){
@@ -114,6 +153,15 @@ export async function emailAnalyticsSummary(input:number|EmailAnalyticsFilters=3
      FROM platform_email_log WHERE createdAt>=DATE_SUB(NOW(),INTERVAL ${days} DAY)${filterSql}
      ORDER BY createdAt DESC LIMIT 50`,...params);
 
+  const topLinks=await prisma.$queryRawUnsafe<Array<{url:string;clicks:bigint;uniqueEmails:bigint;lastClickedAt:Date}>>(
+    `SELECT c.url,COUNT(*) clicks,COUNT(DISTINCT c.emailId) uniqueEmails,MAX(c.clickedAt) lastClickedAt
+     FROM platform_email_click c
+     INNER JOIN platform_email_log e ON e.id=c.emailId
+     WHERE e.createdAt>=DATE_SUB(NOW(),INTERVAL ${days} DAY)${filterSql}
+     GROUP BY c.url
+     ORDER BY clicks DESC,lastClickedAt DESC
+     LIMIT 12`,...params);
+
   const categories=await prisma.$queryRawUnsafe<Array<{category:string}>>(`SELECT DISTINCT category FROM platform_email_log ORDER BY category ASC`);
   const sources=await prisma.$queryRawUnsafe<Array<{source:string|null}>>(`SELECT DISTINCT source FROM platform_email_log WHERE source IS NOT NULL ORDER BY source ASC`);
 
@@ -127,6 +175,7 @@ export async function emailAnalyticsSummary(input:number|EmailAnalyticsFilters=3
     bySource:bySource.map(v=>({...v,source:v.source||"unknown",total:toNum(v.total),sent:toNum(v.sent),failed:toNum(v.failed),opened:toNum(v.opened),clicked:toNum(v.clicked)})),
     daily:daily.map(v=>({day:v.day,sent:toNum(v.sent),opened:toNum(v.opened),clicked:toNum(v.clicked),failed:toNum(v.failed)})),
     failureReasons:failureReasons.map(v=>({reason:v.reason,total:toNum(v.total)})),
+    topLinks:topLinks.map(v=>({url:v.url,clicks:toNum(v.clicks),uniqueEmails:toNum(v.uniqueEmails),lastClickedAt:v.lastClickedAt})),
     recent,categories:categories.map(v=>v.category),sources:sources.map(v=>v.source).filter(Boolean) as string[],
   };
 }
