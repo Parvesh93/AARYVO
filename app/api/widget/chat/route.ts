@@ -12,6 +12,7 @@ import {
   buildShopifyCatalogContext,
   buildShopifyOverviewContext,
   getShopifyCatalogOverview,
+  getShopifyProductFromPage,
   searchShopifyCatalog,
   type ShopifyCatalogProduct,
 } from "@/lib/shopify-catalog";
@@ -606,6 +607,7 @@ export async function POST(request: Request) {
 
     let shopifyConnected = false;
     let shopifyOverview = null;
+    let currentPageProduct: ShopifyCatalogProduct | null = null;
 
     if (shopifyEnabled) {
       try {
@@ -624,6 +626,16 @@ export async function POST(request: Request) {
           shopifyOverview = await getShopifyCatalogOverview(agent.businessId);
         } catch (error) {
           console.error("AARYVO Shopify overview error", error);
+        }
+        if (pageUrl) {
+          try {
+            currentPageProduct = await getShopifyProductFromPage(
+              agent.businessId,
+              pageUrl,
+            );
+          } catch (error) {
+            console.error("AARYVO Shopify page context error", error);
+          }
         }
       }
     }
@@ -671,6 +683,11 @@ export async function POST(request: Request) {
 
     const recentMessages = newest.reverse();
     const knowledge = buildKnowledgeContext(websiteKnowledgeItems);
+    const contextualMessage =
+      currentPageProduct &&
+      /\b(this|it|this product|this item|this one|same product|same item)\b/i.test(message)
+        ? `${message} Current product: ${currentPageProduct.title}`
+        : message;
     const explicitBooking = visitorRequestsBooking(message);
     const explicitWhatsApp = visitorRequestsWhatsApp(message);
     const explicitHuman = visitorRequestsHuman(message);
@@ -686,13 +703,13 @@ export async function POST(request: Request) {
       shopifyConnected && !explicitBooking && !explicitWhatsApp && !explicitHuman
         ? deriveCommerceState({
             messages: recentMessages,
-            currentMessage: message,
+            currentMessage: contextualMessage,
             overview: shopifyOverview,
             priorCommerceActive,
           })
         : {
             active: false,
-            searchQuery: message,
+            searchQuery: contextualMessage,
             baseIntent: "",
             clarificationCount: 0,
             requestedCount: null,
@@ -797,7 +814,7 @@ export async function POST(request: Request) {
               requestedCount: commerceState.requestedCount,
             });
             commerceReply = await generateCommerceSalesReply({
-              message,
+              message: contextualMessage,
               searchQuery: buildCommerceRecommendationQuery(commerceState),
               products: shopifyProducts,
               alternative: alternativeProducts,
@@ -858,7 +875,7 @@ export async function POST(request: Request) {
                 requestedCount: commerceState.requestedCount,
               });
               commerceReply = await generateCommerceSalesReply({
-                message,
+                message: contextualMessage,
                 searchQuery: commerceState.searchQuery,
                 products: shopifyProducts,
                 alternative: true,
@@ -969,7 +986,7 @@ Reply with conversational text only. Do not output JSON or interactive UI.`;
       try {
         const response = await client.responses.create({
           model: MODEL,
-          instructions: `${baseInstructions}${format}\n\nAPPROVED WEBSITE KNOWLEDGE:\n${knowledge || "No website knowledge available."}`,
+          instructions: `${baseInstructions}${format}\n\nCURRENT VISITOR PAGE:\nURL: ${pageUrl || "Unknown"}\nTITLE: ${pageTitle || "Unknown"}${currentPageProduct ? `\nCURRENT SHOPIFY PRODUCT:\n${buildShopifyCatalogContext([currentPageProduct])}` : ""}\n\nAPPROVED WEBSITE KNOWLEDGE:\n${knowledge || "No website knowledge available."}`,
           input: recentMessages.map((item) => ({
             role:
               item.role === "assistant"
