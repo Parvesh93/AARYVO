@@ -458,6 +458,84 @@ async function fillWithAvailableAlternatives(params: {
   return output.slice(0, params.desired);
 }
 
+function currentProductQuestion(message: string) {
+  return /\b(this|it|this product|this item|this one|same product|same item)\b/i.test(message);
+}
+
+function comparisonQuestion(message: string) {
+  return /\b(compare|comparison|difference|differences|versus|vs\.?|which one|which is better|between these|first two|these two)\b/i.test(message);
+}
+
+function productFactUi(product: ShopifyCatalogProduct): RichUi | null {
+  const values: Array<{ label: string; value: string }> = [];
+  const seen = new Set<string>();
+  for (const variant of product.variants) {
+    if (!variant.availableForSale) continue;
+    for (const part of (variant.optionSummary || variant.title || "").split(/[·|,]/)) {
+      const value = part.includes(":") ? part.split(":").slice(1).join(":").trim() : part.trim();
+      const key = value.toLowerCase();
+      if (!value || value.length > 24 || /^(default title|default)$/i.test(value) || seen.has(key)) continue;
+      seen.add(key);
+      values.push({ label: value, value: `Is ${product.title} available in ${value}?` });
+      if (values.length >= 4) return { type: "chips", options: values };
+    }
+  }
+  return values.length ? { type: "chips", options: values } : null;
+}
+
+async function generateCurrentProductReply(params: {
+  message: string;
+  product: ShopifyCatalogProduct;
+}) {
+  const context = buildShopifyCatalogContext([params.product]).slice(0, 10000);
+  try {
+    const response = await client.responses.create({
+      model: MODEL,
+      instructions: `You are an ecommerce product specialist answering a question about the exact Shopify product the visitor is currently viewing.
+Use ONLY the supplied live Shopify facts. Never invent a size, colour, material, occasion, discount, stock status or feature.
+Answer the customer's exact question first. If a requested option is not present in the supplied variants/tags, say you cannot confirm it from the current catalogue data.
+Keep the answer concise: 1-3 sentences. Do not output JSON.`,
+      input: `CUSTOMER QUESTION:
+${params.message}
+
+CURRENT SHOPIFY PRODUCT:
+${context}`,
+    });
+    return (response.output_text || "").trim().slice(0, 1000) ||
+      `I can help with ${params.product.title}. Ask me about its price, availability or available options.`;
+  } catch (error) {
+    console.error("AARYVO current product reply error", error);
+    return `${params.product.title} is ${params.product.availableForSale ? "currently available" : "currently unavailable"} based on the synced catalogue.`;
+  }
+}
+
+async function generateProductComparisonReply(params: {
+  message: string;
+  products: ShopifyCatalogProduct[];
+}) {
+  const products = params.products.slice(0, 3);
+  if (products.length < 2) return null;
+  try {
+    const response = await client.responses.create({
+      model: MODEL,
+      instructions: `You are an ecommerce product comparison assistant.
+Compare ONLY the supplied live Shopify facts. Do not invent quality, suitability, material, popularity or features.
+Focus on concrete differences such as price, availability, product type, tags, description and variants.
+If the customer asks which is better, explain which product matches a stated requirement; if no requirement is known, explain the differences without declaring an unsupported winner.
+Keep it concise and useful: 2-4 sentences. Do not output JSON.`,
+      input: `CUSTOMER REQUEST:
+${params.message}
+
+PRODUCTS TO COMPARE:
+${buildShopifyCatalogContext(products).slice(0, 14000)}`,
+    });
+    return (response.output_text || "").trim().slice(0, 1400) || null;
+  } catch (error) {
+    console.error("AARYVO product comparison error", error);
+    return null;
+  }
+}
+
 async function generateCommerceSalesReply(params: {
   message: string;
   searchQuery: string;
@@ -747,10 +825,49 @@ export async function POST(request: Request) {
 
     let shopifyProducts: ShopifyCatalogProduct[] = [];
     let alternativeProducts = false;
+    let currentProductReply: string | null = null;
+    let currentProductUi: RichUi | null = null;
+    let comparisonReply: string | null = null;
+
+    if (currentPageProduct && currentProductQuestion(message)) {
+      currentProductReply = await generateCurrentProductReply({
+        message,
+        product: currentPageProduct,
+      });
+      currentProductUi = productFactUi(currentPageProduct);
+    }
+
+    if (!currentProductReply && comparisonQuestion(message)) {
+      const priorUserText = recentMessages
+        .filter((item) => item.role !== "assistant")
+        .slice(-5)
+        .map((item) => item.content)
+        .join(" ");
+      try {
+        const comparisonProducts = await searchShopifyCatalog(
+          agent.businessId,
+          priorUserText,
+          3,
+          agent.id,
+        );
+        if (currentPageProduct && !comparisonProducts.some((product) => product.id === currentPageProduct!.id)) {
+          comparisonProducts.unshift(currentPageProduct);
+        }
+        comparisonReply = await generateProductComparisonReply({
+          message,
+          products: comparisonProducts,
+        });
+        if (comparisonReply) shopifyProducts = comparisonProducts.slice(0, 3);
+      } catch (error) {
+        console.error("AARYVO comparison product lookup error", error);
+      }
+    }
+
+    let alternativeProducts = false;
     let commerceUi: RichUi | null = null;
     let commerceReply: string | null = null;
 
-    if (commerceState.active) {
+    if (!currentProductReply && !comparisonReply && commerceState.active) {
       const desired = desiredCommerceProductCount(commerceState);
       const clarifyFirst = shouldClarifyCommerceBeforeProducts(commerceState);
 
@@ -965,7 +1082,17 @@ Reply with conversational text only. Do not output JSON or interactive UI.`;
 
     let parsed: { reply: string; ui: RichUi | null };
 
-    if (explicitBooking && bookingFeatureEnabled) {
+    if (currentProductReply) {
+      parsed = {
+        reply: currentProductReply,
+        ui: currentProductUi,
+      };
+    } else if (comparisonReply) {
+      parsed = {
+        reply: comparisonReply,
+        ui: null,
+      };
+    } else if (explicitBooking && bookingFeatureEnabled) {
       parsed = {
         reply:
           "Certainly — you can choose an available consultation time below.",
