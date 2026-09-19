@@ -328,6 +328,17 @@ function productPayload(products: ShopifyCatalogProduct[]) {
     maxPrice: product.maxPrice,
     currencyCode: product.currencyCode,
     availableForSale: product.availableForSale,
+    variants: product.variants
+      .filter((variant) => variant.availableForSale)
+      .slice(0, 12)
+      .map((variant) => ({
+        id: variant.shopifyVariantId,
+        title: variant.title,
+        price: variant.price,
+        compareAtPrice: variant.compareAtPrice,
+        availableForSale: variant.availableForSale,
+        optionSummary: variant.optionSummary,
+      })),
   }));
 }
 
