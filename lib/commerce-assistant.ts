@@ -549,20 +549,35 @@ export function buildCommerceClarification(params: {
   };
 }
 
+function usefulRefinementValue(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length < 2 || trimmed.length > 24) return false;
+  if (
+    /^(default title|default|one size|one-size|new|sale|featured|shopify|fashion|jewelry|jewellery|product|products|collection|collections|women|woman|men|man|unisex)$/i.test(
+      trimmed,
+    )
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function extractRefinementValues(products: ShopifyCatalogProduct[], query: string) {
   const seen = new Set<string>();
   const options: Array<{ label: string; value: string }> = [];
   const normalizedQuery = normalize(query);
 
+  // Prefer real purchasable variant values first: sizes, colours, materials,
+  // etc. Shopify's "Default Title" is an implementation detail and is hidden.
   for (const product of products) {
     for (const variant of product.variants) {
       if (!variant.availableForSale) continue;
-      const summary = variant.optionSummary || "";
+      const summary = variant.optionSummary || variant.title || "";
       for (const part of summary.split(/[·|,]/)) {
         const value = part.includes(":")
           ? part.split(":").slice(1).join(":").trim()
           : part.trim();
-        if (!value || value.length < 2 || value.length > 24) continue;
+        if (!usefulRefinementValue(value)) continue;
         const key = normalize(value);
         if (!key || normalizedQuery.includes(key) || seen.has(key)) continue;
         seen.add(key);
@@ -572,13 +587,13 @@ function extractRefinementValues(products: ShopifyCatalogProduct[], query: strin
     }
   }
 
+  // Then use meaningful merchandising tags, excluding generic store taxonomy.
   for (const product of products) {
     for (const raw of (product.tags || "").split(",")) {
       const value = raw.trim();
-      if (!value || value.length < 2 || value.length > 24) continue;
+      if (!usefulRefinementValue(value)) continue;
       const key = normalize(value);
       if (!key || normalizedQuery.includes(key) || seen.has(key)) continue;
-      if (/^(new|sale|featured|shopify)$/i.test(value)) continue;
       seen.add(key);
       options.push({ label: value, value });
       if (options.length >= 4) return options;
@@ -603,10 +618,14 @@ export function buildCommerceRefinementUi(
     .sort((a, b) => b[1] - a[1])
     .map(([type]) => type);
 
-  if (types.length >= 3) {
+  const usefulTypes = types.filter(
+    (type) => usefulRefinementValue(type) && !/^(fashion|jewelry|jewellery)$/i.test(type),
+  );
+
+  if (usefulTypes.length >= 2) {
     return {
       type: "chips",
-      options: types.slice(0, 5).map((type) => ({
+      options: usefulTypes.slice(0, 5).map((type) => ({
         label: type,
         value: `Show me ${type}`,
       })),
