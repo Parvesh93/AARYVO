@@ -35,6 +35,7 @@ export async function POST(request: Request) {
       launcherAnimation: growth?agent.widgetLauncherAnimation:"PULSE",
       launcherLabelEnabled: growth?agent.widgetLauncherLabelEnabled:true,
       showPoweredBy: growth?agent.widgetShowPoweredBy:true,
+      conversationMode: agent.widgetConversationMode === "CONVERSATION_FIRST" ? "CONVERSATION_FIRST" : "LEAD_FIRST",
       bookingScoreThreshold: agent.bookingScoreThreshold,
       richAiActionsEnabled: hasFeature(agent.business.plan,"richAiActions"),
     }, { headers });
