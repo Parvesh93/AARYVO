@@ -25,6 +25,34 @@ function containsTerm(text: string, term: string) {
   return Boolean(needle) && haystack.includes(` ${needle} `);
 }
 
+const CATEGORY_SYNONYMS: Record<string, string[]> = {
+  ring: ["ring", "rings"],
+  earring: ["earring", "earrings"],
+  necklace: ["necklace", "necklaces"],
+  bracelet: ["bracelet", "bracelets", "bangle", "bangles"],
+  bangle: ["bangle", "bangles", "bracelet", "bracelets"],
+  top: ["top", "tops"],
+  shirt: ["shirt", "shirts"],
+  dress: ["dress", "dresses"],
+  pant: ["pant", "pants", "trouser", "trousers"],
+  trouser: ["trouser", "trousers", "pant", "pants"],
+  shoe: ["shoe", "shoes"],
+  bag: ["bag", "bags"],
+  serum: ["serum", "serums"],
+  cleanser: ["cleanser", "cleansers"],
+  cream: ["cream", "creams"],
+};
+
+function requiredCategoryTerms(query: string) {
+  const normalized = normalize(query);
+  for (const [key, values] of Object.entries(CATEGORY_SYNONYMS)) {
+    if (values.some((value) => containsTerm(normalized, value))) {
+      return [...new Set(values)];
+    }
+  }
+  return [] as string[];
+}
+
 const TERM_SYNONYMS: Record<string, string[]> = {
   jewellery: ["jewelry"],
   jewelry: ["jewellery"],
@@ -248,6 +276,7 @@ export async function searchShopifyCatalog(
   agentId?: string,
 ): Promise<ShopifyCatalogProduct[]> {
   const terms = searchTerms(query);
+  const categoryTerms = requiredCategoryTerms(query);
   const maxPrice = priceCeiling(query);
   const broadDiscovery = isBroadDiscoveryQuery(query);
   const wantsAvailable = /\b(in stock|available now|available|ready to ship)\b/i.test(query);
@@ -277,6 +306,19 @@ export async function searchShopifyCatalog(
     if (wantsAvailable && !product.variants.some((variant) => variant.availableForSale)) return false;
 
     if (!terms.length) return broadDiscovery || maxPrice !== null;
+
+    const categoryStructured = normalize([
+      product.title,
+      product.productType || "",
+      product.tags || "",
+    ].join(" "));
+
+    if (
+      categoryTerms.length &&
+      !categoryTerms.some((term) => containsTerm(categoryStructured, term))
+    ) {
+      return false;
+    }
 
     const structured = normalize([
       product.title,
