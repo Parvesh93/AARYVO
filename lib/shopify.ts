@@ -220,12 +220,23 @@ export async function cleanupShopifyAfterUninstall(shopInput: string) {
 
   await prisma.$transaction(async (tx) => {
     if (agentIds.length) {
-      await tx.knowledgeItem.deleteMany({
-        where: {
-          agentId: { in: agentIds },
-          source: { startsWith: "shopify://" },
-        },
+      // MySQL can reject Prisma's startsWith/LIKE here when the source
+      // column and generated parameter use different utf8mb4 collations.
+      // Shopify knowledge sources are exact, known values, so fetch them first
+      // and delete by primary key to avoid collation-dependent LIKE matching.
+      const shopifyKnowledge = await tx.knowledgeItem.findMany({
+        where: { agentId: { in: agentIds } },
+        select: { id: true, source: true },
       });
+      const shopifyKnowledgeIds = shopifyKnowledge
+        .filter((item) => item.source.startsWith("shopify://"))
+        .map((item) => item.id);
+
+      if (shopifyKnowledgeIds.length) {
+        await tx.knowledgeItem.deleteMany({
+          where: { id: { in: shopifyKnowledgeIds } },
+        });
+      }
     }
 
     await tx.shopifyStore.delete({ where: { id: store.id } });
