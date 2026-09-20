@@ -94,7 +94,6 @@ export function shopifyAuthorizationUrl(params: {
     scope: scopes().join(","),
     redirect_uri: `${shopifyAppUrl()}/api/integrations/shopify/callback`,
     state,
-    expiring: "1",
   });
   return `https://${shop}/admin/oauth/authorize?${query.toString()}`;
 }
@@ -115,19 +114,9 @@ export function verifyShopifyCallbackHmac(url: URL) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-export async function exchangeShopifyCode(shop: string, code: string) {
-  const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      client_id: apiKey(),
-      client_secret: apiSecret(),
-      code,
-    }),
-    cache: "no-store",
-  });
-
-  const data = (await response.json()) as {
+async function readShopifyTokenResponse(response: Response) {
+  const raw = await response.text();
+  let data: {
     access_token?: string;
     scope?: string;
     expires_in?: number;
@@ -135,7 +124,44 @@ export async function exchangeShopifyCode(shop: string, code: string) {
     refresh_token_expires_in?: number;
     error?: string;
     error_description?: string;
-  };
+  } = {};
+
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch {
+    const plain = raw
+      .replace(/<script[\\s\\S]*?<\\/script>/gi, " ")
+      .replace(/<style[\\s\\S]*?<\\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\\s+/g, " ")
+      .trim()
+      .slice(0, 500);
+
+    throw new Error(
+      plain ||
+        `Shopify token endpoint returned an invalid response (${response.status}).`,
+    );
+  }
+
+  return data;
+}
+
+export async function exchangeShopifyCode(shop: string, code: string) {
+  const form = new URLSearchParams({
+    client_id: apiKey(),
+    client_secret: apiSecret(),
+    code,
+    expiring: "1",
+  });
+
+  const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+    cache: "no-store",
+  });
+
+  const data = await readShopifyTokenResponse(response);
 
   if (!response.ok || !data.access_token) {
     throw new Error(data.error_description || data.error || "Shopify authorization failed.");
@@ -245,37 +271,31 @@ async function refreshShopifyAccessToken(store: {
     ? decryptToken(store.refreshTokenEncrypted)
     : null;
 
-  const body = refreshToken
-    ? {
+  const form = refreshToken
+    ? new URLSearchParams({
         client_id: apiKey(),
         client_secret: apiSecret(),
         grant_type: "refresh_token",
         refresh_token: refreshToken,
-      }
-    : {
+      })
+    : new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
         client_id: apiKey(),
         client_secret: apiSecret(),
-        grant_type: "token_exchange",
         subject_token: currentAccessToken,
-        subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
+        subject_token_type: "urn:shopify:params:oauth:token-type:offline-access-token",
         requested_token_type: "urn:shopify:params:oauth:token-type:offline-access-token",
-      };
+        expiring: "1",
+      });
 
   const response = await fetch(`https://${store.shopDomain}/admin/oauth/access_token`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
     cache: "no-store",
   });
 
-  const data = (await response.json()) as {
-    access_token?: string;
-    expires_in?: number;
-    refresh_token?: string;
-    refresh_token_expires_in?: number;
-    error?: string;
-    error_description?: string;
-  };
+  const data = await readShopifyTokenResponse(response);
 
   if (!response.ok || !data.access_token) {
     throw new Error(
