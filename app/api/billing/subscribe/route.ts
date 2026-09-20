@@ -13,9 +13,9 @@ export async function POST(request: Request) {
     include: { user: true, business: { include: { shopifyStore: { select: { id: true } } } } },
   });
   if (!member) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  if (member.business.shopifyStore) {
+  if (member.business.billingChannel === "SHOPIFY" || member.business.shopifyStore) {
     return NextResponse.json(
-      { error: "This workspace is connected to Shopify. Manage your AARYVO subscription through Shopify." },
+      { error: "This is a Shopify-billed workspace. Manage your AARYVO subscription through Shopify." },
       { status: 409 },
     );
   }
