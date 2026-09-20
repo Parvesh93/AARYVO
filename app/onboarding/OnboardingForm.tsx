@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function OnboardingForm() {
+export default function OnboardingForm({ next }: { next?: string }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export default function OnboardingForm() {
         if (response.status === 401) setTimeout(() => router.push("/login"), 800);
         return;
       }
-      router.push(data.redirectTo || "/dashboard");
+      router.push(next || data.redirectTo || "/dashboard");
       router.refresh();
     } catch {
       setError("Could not connect to AARYVO. Please try again.");
