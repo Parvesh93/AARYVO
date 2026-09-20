@@ -24,9 +24,11 @@ export default async function BillingPage({
   const b = member.business;
   const quota = await getBusinessConversationUsage(b.id);
   const shopifyManaged =
-    Boolean(b.shopifyStore) &&
+    b.billingChannel === "SHOPIFY" &&
     !b.razorpaySubscriptionId;
-  const shopifyAvailable = !b.razorpaySubscriptionId;
+  const shopifyAvailable =
+    b.billingChannel !== "SHOPIFY" &&
+    !b.razorpaySubscriptionId;
 
   return <div className="mx-auto max-w-[1400px] pb-8">
     {query.shopifyPricing === "success" && (
