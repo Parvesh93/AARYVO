@@ -43,6 +43,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     hasFeature(business.plan, "shopifyIntegration") ||
     (!business.razorpaySubscriptionId && !business.shopifyStore);
   const productLimit = shopifyProductLimit(business.plan);
+  const shopifySyncEnabled = hasFeature(business.plan, "shopifyIntegration");
   const store = business.shopifyStore
     ? {
         shopDomain: business.shopifyStore.shopDomain,
@@ -71,6 +72,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           productLimit={productLimit}
           notice={notice}
           pricingConfigured={isShopifyPartnerPricingConfigured()}
+          syncEnabled={shopifySyncEnabled}
         />
 
         <div className="grid gap-4 md:grid-cols-2">
