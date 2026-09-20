@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   exchangeShopifyCode,
+  getShopifyHostedPricingUrl,
   normalizeShopDomain,
   registerShopifyUninstallWebhook,
   saveShopifyConnection,
   shopifyAppUrl,
+  syncShopifyPricingState,
   verifyShopifyCallbackHmac,
   verifyShopifyState,
 } from "@/lib/shopify";
@@ -50,9 +52,33 @@ export async function GET(request: Request) {
       console.error("Shopify uninstall webhook registration failed:", webhookError);
     }
 
-    const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
-    redirectUrl.searchParams.set("shopify", "connected");
-    return NextResponse.redirect(redirectUrl);
+    const business = await prisma.business.findUnique({
+      where: { id: state.businessId },
+      select: { razorpaySubscriptionId: true },
+    });
+
+    // Direct AARYVO customers who already pay through Razorpay can connect
+    // Shopify as an integration without starting a second subscription.
+    if (business?.razorpaySubscriptionId) {
+      const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
+      redirectUrl.searchParams.set("shopify", "connected");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // OAuth only proves store ownership. It must never grant a paid AARYVO
+    // entitlement on its own. Ask Shopify for the real subscription state.
+    const pricingState = await syncShopifyPricingState(state.businessId);
+
+    if (pricingState.managed && pricingState.active) {
+      const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
+      redirectUrl.searchParams.set("shopify", "connected");
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // No active Shopify subscription: send the merchant straight to Shopify's
+    // hosted App Pricing page. AARYVO stays FREE until Shopify confirms a plan.
+    const pricing = await getShopifyHostedPricingUrl(state.businessId);
+    return NextResponse.redirect(pricing.url);
   } catch (error) {
     const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
     redirectUrl.searchParams.set("shopify", "error");
