@@ -55,15 +55,27 @@ export async function GET(request: Request) {
 
     const business = await prisma.business.findUnique({
       where: { id: state.businessId },
-      select: { razorpaySubscriptionId: true },
+      select: { razorpaySubscriptionId: true, billingChannel: true },
     });
 
-    // Direct AARYVO customers who already pay through Razorpay can connect
-    // Shopify as an integration without starting a second subscription.
+    // A workspace with an existing direct Razorpay subscription must not be
+    // silently moved to Shopify billing while that subscription is active.
+    // Keep the direct subscription authoritative until it is explicitly
+    // migrated/cancelled, preventing duplicate charges.
     if (business?.razorpaySubscriptionId) {
       const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
-      redirectUrl.searchParams.set("shopify", "connected");
+      redirectUrl.searchParams.set("shopify", "connected-direct-billing");
       return NextResponse.redirect(redirectUrl);
+    }
+
+    // Shopify-origin workspaces are permanently identified as Shopify-billed.
+    // This prevents Razorpay from becoming available merely because a store is
+    // later uninstalled or temporarily disconnected.
+    if (business?.billingChannel !== "SHOPIFY") {
+      await prisma.business.update({
+        where: { id: state.businessId },
+        data: { billingChannel: "SHOPIFY" },
+      });
     }
 
     // OAuth only proves store ownership. It must never grant a paid AARYVO
