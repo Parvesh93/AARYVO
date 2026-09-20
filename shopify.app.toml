@@ -1,0 +1,20 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "8bc76b5bbc5534235e7f30521d4af879"
+name = "AARYVO AI Shopping Assistant"
+application_url = "https://aaryvo.ppdesigntech.com"
+embedded = false
+
+[webhooks]
+api_version = "2026-07"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_inventory,read_products"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [
+  "https://aaryvo.ppdesigntech.com/api/integrations/shopify/callback"
+]
