@@ -19,6 +19,7 @@ type Props = {
   notice?: string | null;
   pricingConfigured?: boolean;
   syncEnabled?: boolean;
+  installUrl?: string | null;
 };
 
 export default function ShopifyIntegrationCard({
@@ -30,9 +31,9 @@ export default function ShopifyIntegrationCard({
   notice,
   pricingConfigured = false,
   syncEnabled = false,
+  installUrl = null,
 }: Props) {
   const router = useRouter();
-  const [shop, setShop] = useState("");
   const [busy, setBusy] = useState<"sync" | "disconnect" | "pricing" | null>(null);
   const [message, setMessage] = useState(notice || "");
 
@@ -230,31 +231,27 @@ export default function ShopifyIntegrationCard({
           </div>
         </div>
       ) : (
-        <form action="/api/integrations/shopify/start" method="GET" className="mt-6 rounded-2xl bg-[#f7f8f9] p-5">
-          <label className="text-sm font-semibold" htmlFor="shopify-shop">
-            Shopify store domain
-          </label>
-          <p className="mt-1 text-xs leading-5 text-black/45">
-            Enter your <span className="font-medium">.myshopify.com</span> domain. You will be taken to Shopify to approve read-only catalogue access.
+        <div className="mt-6 rounded-2xl bg-[#f7f8f9] p-5">
+          <p className="text-sm font-semibold">Connect with Shopify</p>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-black/45">
+            Install AARYVO from Shopify to securely connect your store. Shopify will handle store selection and authorization.
           </p>
-          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-            <input
-              id="shopify-shop"
-              name="shop"
-              value={shop}
-              onChange={(event) => setShop(event.target.value)}
-              placeholder="your-store.myshopify.com"
-              required
-              className="min-w-0 flex-1 rounded-full border border-black/10 bg-white px-4 py-3 text-sm outline-none focus:border-black/35"
-            />
-            <button className="rounded-full bg-[#151515] px-5 py-3 text-sm font-semibold text-white">
-              Connect Shopify
-            </button>
-          </div>
+          {installUrl ? (
+            <a
+              href={installUrl}
+              className="mt-4 inline-flex rounded-full bg-[#151515] px-5 py-3 text-sm font-semibold text-white"
+            >
+              Install on Shopify
+            </a>
+          ) : (
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
+              Shopify App Store URL is not configured yet.
+            </div>
+          )}
           <p className="mt-3 text-[11px] text-black/35">
             AARYVO requests product and inventory read access only. It cannot edit your store in this phase.
           </p>
-        </form>
+        </div>
       )}
 
       {message && (
