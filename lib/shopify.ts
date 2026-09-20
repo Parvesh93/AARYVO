@@ -114,6 +114,146 @@ export function verifyShopifyCallbackHmac(url: URL) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
+export function verifyShopifyWebhookHmac(
+  rawBody: string,
+  receivedHmac: string | null,
+) {
+  if (!receivedHmac || !apiSecret()) return false;
+
+  const expected = crypto
+    .createHmac("sha256", apiSecret())
+    .update(rawBody, "utf8")
+    .digest("base64");
+
+  const a = Buffer.from(receivedHmac, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+export async function registerShopifyUninstallWebhook(
+  shop: string,
+  accessToken: string,
+) {
+  const callbackUrl = `${shopifyAppUrl()}/api/webhooks/shopify/app-uninstalled`;
+  const response = await fetch(
+    `https://${shop}/admin/api/${API_VERSION}/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token": accessToken,
+      },
+      body: JSON.stringify({
+        query: `mutation AaryvoRegisterUninstallWebhook($callbackUrl: URL!) {
+          webhookSubscriptionCreate(
+            topic: APP_UNINSTALLED
+            webhookSubscription: {
+              callbackUrl: $callbackUrl
+              format: JSON
+            }
+          ) {
+            webhookSubscription {
+              id
+              topic
+              uri
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }`,
+        variables: { callbackUrl },
+      }),
+      cache: "no-store",
+    },
+  );
+
+  const payload = (await response.json()) as {
+    data?: {
+      webhookSubscriptionCreate?: {
+        webhookSubscription?: { id?: string; topic?: string; uri?: string } | null;
+        userErrors?: Array<{ message?: string }>;
+      };
+    };
+    errors?: Array<{ message?: string }>;
+  };
+
+  const userErrors =
+    payload.data?.webhookSubscriptionCreate?.userErrors
+      ?.map((error) => error.message)
+      .filter(Boolean) || [];
+
+  if (!response.ok || payload.errors?.length || userErrors.length) {
+    throw new Error(
+      payload.errors?.map((error) => error.message).filter(Boolean).join("; ") ||
+        userErrors.join("; ") ||
+        "Unable to register Shopify uninstall webhook.",
+    );
+  }
+
+  return payload.data?.webhookSubscriptionCreate?.webhookSubscription || null;
+}
+
+export async function cleanupShopifyAfterUninstall(shopInput: string) {
+  const shop = normalizeShopDomain(shopInput);
+  const store = await prisma.shopifyStore.findUnique({
+    where: { shopDomain: shop },
+    include: {
+      business: {
+        select: {
+          id: true,
+          razorpaySubscriptionId: true,
+        },
+      },
+    },
+  });
+
+  if (!store) return { cleaned: false, reason: "not_found" as const };
+
+  const agentIds = (
+    await prisma.agent.findMany({
+      where: { businessId: store.businessId },
+      select: { id: true },
+    })
+  ).map((agent) => agent.id);
+
+  await prisma.$transaction(async (tx) => {
+    if (agentIds.length) {
+      await tx.knowledgeItem.deleteMany({
+        where: {
+          agentId: { in: agentIds },
+          source: { startsWith: "shopify://" },
+        },
+      });
+    }
+
+    await tx.shopifyStore.delete({ where: { id: store.id } });
+
+    if (!store.business.razorpaySubscriptionId) {
+      await tx.business.update({
+        where: { id: store.businessId },
+        data: {
+          plan: "FREE",
+          subscriptionStatus: "FREE",
+          monthlyConversationLimit: 50,
+          subscriptionCurrentStart: null,
+          subscriptionCurrentEnd: null,
+          subscriptionCancelAtEnd: false,
+          usagePeriodStart: null,
+          usagePeriodEnd: null,
+        },
+      });
+    }
+  });
+
+  return {
+    cleaned: true,
+    businessId: store.businessId,
+    shopDomain: shop,
+  };
+}
+
 async function readShopifyTokenResponse(response: Response) {
   const raw = await response.text();
   let data: {
