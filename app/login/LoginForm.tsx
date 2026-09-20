@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function LoginForm() {
+export default function LoginForm({ next }: { next?: string }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,7 +24,7 @@ export default function LoginForm() {
         setError(data.error || "Unable to sign in.");
         return;
       }
-      router.push(data.redirectTo || "/dashboard");
+      router.push(next || data.redirectTo || "/dashboard");
       router.refresh();
     } catch {
       setError("Could not connect to AARYVO. Please try again.");
