@@ -10,7 +10,8 @@ function proratedUpgradePaise(currentPrice:number,targetPrice:number,periodStart
 
 export async function POST(request:Request){
  const session=await getSession();if(!session)return NextResponse.json({error:"Unauthorized"},{status:401});
- const member=await prisma.businessMember.findFirst({where:{userId:session.userId},include:{business:true,user:true}});if(!member)return NextResponse.json({error:"Workspace not found"},{status:404});
+ const member=await prisma.businessMember.findFirst({where:{userId:session.userId},include:{business:{include:{shopifyStore:{select:{id:true}}}},user:true}});if(!member)return NextResponse.json({error:"Workspace not found"},{status:404});
+ if(member.business.shopifyStore)return NextResponse.json({error:"This workspace is connected to Shopify. Manage plan changes through Shopify."},{status:409});
  const body=await request.json(),plan=String(body.plan||"").toUpperCase();if(!isPlanKey(plan)||plan==="FREE")return NextResponse.json({error:"Choose a paid plan."},{status:400});
  const business=member.business;if(!business.razorpaySubscriptionId||business.plan==="FREE")return NextResponse.json({error:"No active paid subscription found."},{status:400});if(business.plan===plan)return NextResponse.json({error:"This is already your current plan."},{status:400});if(business.subscriptionCancelAtEnd)return NextResponse.json({error:"Your subscription is already scheduled for cancellation. Resolve that before changing plans."},{status:409});
  const pending=await activeTransitionForBusiness(business.id);
