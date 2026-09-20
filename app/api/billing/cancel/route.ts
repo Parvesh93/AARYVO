@@ -12,9 +12,9 @@ export async function POST() {
     include: { business: { include: { shopifyStore: { select: { id: true } } } } },
   });
   if (!member) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
-  if (member.business.shopifyStore) {
+  if (member.business.billingChannel === "SHOPIFY" || member.business.shopifyStore) {
     return NextResponse.json(
-      { error: "This workspace is connected to Shopify. Manage cancellation through Shopify." },
+      { error: "This is a Shopify-billed workspace. Manage cancellation through Shopify." },
       { status: 409 },
     );
   }
