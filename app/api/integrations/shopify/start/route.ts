@@ -1,13 +1,21 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { featureError, hasFeature } from "@/lib/plan-entitlements";
 import { isShopifyConfigured, normalizeShopDomain, shopifyAuthorizationUrl } from "@/lib/shopify";
 
 export async function GET(request: Request) {
   try {
+    const requestUrl = new URL(request.url);
+    const shopParam = requestUrl.searchParams.get("shop") || "";
+    const shop = normalizeShopDomain(shopParam);
+    const resumePath = `/api/integrations/shopify/start?shop=${encodeURIComponent(shop)}`;
+
     const session = await getSession();
-    if (!session) return NextResponse.redirect(new URL("/login", request.url));
+    if (!session) {
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("next", resumePath);
+      return NextResponse.redirect(loginUrl);
+    }
 
     if (!isShopifyConfigured()) {
       return NextResponse.redirect(new URL("/dashboard/integrations?shopify=not-configured", request.url));
@@ -17,16 +25,11 @@ export async function GET(request: Request) {
       where: { userId: session.userId },
       include: { business: { select: { id: true, plan: true } } },
     });
-    if (!member) return NextResponse.redirect(new URL("/onboarding", request.url));
-    if (!hasFeature(member.business.plan, "shopifyIntegration")) {
-      const url = new URL("/dashboard/integrations", request.url);
-      url.searchParams.set("shopify", "upgrade");
-      url.searchParams.set("message", featureError("shopifyIntegration"));
-      return NextResponse.redirect(url);
+    if (!member) {
+      const onboardingUrl = new URL("/onboarding", request.url);
+      onboardingUrl.searchParams.set("next", resumePath);
+      return NextResponse.redirect(onboardingUrl);
     }
-
-    const shopParam = new URL(request.url).searchParams.get("shop") || "";
-    const shop = normalizeShopDomain(shopParam);
     const authorizationUrl = shopifyAuthorizationUrl({
       businessId: member.business.id,
       userId: session.userId,
