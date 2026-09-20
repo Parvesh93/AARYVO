@@ -25,9 +25,7 @@ export default async function BillingPage({
   const quota = await getBusinessConversationUsage(b.id);
   const shopifyManaged =
     Boolean(b.shopifyStore) &&
-    !b.razorpaySubscriptionId &&
-    b.subscriptionStatus.toLowerCase() === "active" &&
-    ["STARTER", "GROWTH", "PRO"].includes(b.plan.toUpperCase());
+    !b.razorpaySubscriptionId;
 
   return <div className="mx-auto max-w-[1400px] pb-8">
     {query.shopifyPricing === "success" && (
