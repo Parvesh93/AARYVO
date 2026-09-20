@@ -8,6 +8,22 @@ embedded = false
 [webhooks]
 api_version = "2026-07"
 
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "https://aaryvo.ppdesigntech.com/api/webhooks/shopify/app-uninstalled"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request"]
+uri = "https://aaryvo.ppdesigntech.com/api/webhooks/shopify/customers-data-request"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/redact"]
+uri = "https://aaryvo.ppdesigntech.com/api/webhooks/shopify/customers-redact"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["shop/redact"]
+uri = "https://aaryvo.ppdesigntech.com/api/webhooks/shopify/shop-redact"
+
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 scopes = "read_inventory,read_products"
