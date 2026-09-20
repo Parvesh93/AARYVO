@@ -931,11 +931,71 @@ export async function testShopifyPartnerPricingConnection() {
   };
 }
 
-export function shopifyPricingPageUrl(shopDomain: string) {
-  const appHandle = process.env.SHOPIFY_APP_HANDLE?.trim();
-  if (!appHandle) return null;
+export function shopifyPricingPageUrl(shopDomain: string, appHandle?: string | null) {
+  const handle = appHandle?.trim() || process.env.SHOPIFY_APP_HANDLE?.trim();
+  if (!handle) return null;
   const storeHandle = normalizeShopDomain(shopDomain).replace(/\.myshopify\.com$/, "");
-  return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
+  return `https://admin.shopify.com/store/${storeHandle}/charges/${handle}/pricing_plans`;
+}
+
+function slugifyShopifyAppHandle(value: string) {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+async function resolveShopifyAppHandle(
+  shopDomain: string,
+  token: string,
+  expectedAppId: string,
+  appName: string,
+) {
+  const configured = process.env.SHOPIFY_APP_HANDLE?.trim();
+  const generated = slugifyShopifyAppHandle(appName);
+  const candidates = Array.from(
+    new Set(
+      [configured, generated, "aaryvo-ai-shopping-assistant"]
+        .filter((value): value is string => Boolean(value))
+        .map((value) => value.trim()),
+    ),
+  );
+
+  for (const handle of candidates) {
+    const response = await fetch(
+      `https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": token,
+        },
+        body: JSON.stringify({
+          query: `query AaryvoAppByHandle($handle: String!) {
+            appByHandle(handle: $handle) {
+              id
+              title
+            }
+          }`,
+          variables: { handle },
+        }),
+        cache: "no-store",
+      },
+    );
+
+    const payload = (await response.json()) as {
+      data?: { appByHandle?: { id?: string; title?: string } | null };
+      errors?: Array<{ message?: string }>;
+    };
+
+    if (!response.ok || payload.errors?.length) continue;
+    if (payload.data?.appByHandle?.id === expectedAppId) return handle;
+  }
+
+  throw new Error(
+    "Unable to resolve the Shopify app handle automatically. Add SHOPIFY_APP_HANDLE to the server configuration.",
+  );
 }
 
 async function getShopifyBillingIds(shopDomain: string, token: string) {
@@ -973,6 +1033,29 @@ async function getShopifyBillingIds(shopDomain: string, token: string) {
     appId,
     appName: payload.data?.app?.title || "AARYVO",
     apiKey: payload.data?.app?.apiKey || "",
+  };
+}
+
+export async function getShopifyHostedPricingUrl(businessId: string) {
+  const store = await prisma.shopifyStore.findUnique({ where: { businessId } });
+  if (!store) throw new Error("Connect a Shopify store before opening Shopify App Pricing.");
+
+  const token = await refreshShopifyAccessToken(store);
+  const billingIds = await getShopifyBillingIds(store.shopDomain, token);
+  const appHandle = await resolveShopifyAppHandle(
+    store.shopDomain,
+    token,
+    billingIds.appId,
+    billingIds.appName,
+  );
+  const url = shopifyPricingPageUrl(store.shopDomain, appHandle);
+  if (!url) throw new Error("Unable to create the Shopify App Pricing URL.");
+
+  return {
+    url,
+    appHandle,
+    appId: billingIds.appId,
+    shopDomain: store.shopDomain,
   };
 }
 
