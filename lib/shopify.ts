@@ -94,6 +94,7 @@ export function shopifyAuthorizationUrl(params: {
     scope: scopes().join(","),
     redirect_uri: `${shopifyAppUrl()}/api/integrations/shopify/callback`,
     state,
+    expiring: "1",
   });
   return `https://${shop}/admin/oauth/authorize?${query.toString()}`;
 }
@@ -129,6 +130,9 @@ export async function exchangeShopifyCode(shop: string, code: string) {
   const data = (await response.json()) as {
     access_token?: string;
     scope?: string;
+    expires_in?: number;
+    refresh_token?: string;
+    refresh_token_expires_in?: number;
     error?: string;
     error_description?: string;
   };
@@ -140,6 +144,9 @@ export async function exchangeShopifyCode(shop: string, code: string) {
   return {
     accessToken: data.access_token,
     scope: data.scope || "",
+    expiresIn: data.expires_in || null,
+    refreshToken: data.refresh_token || null,
+    refreshTokenExpiresIn: data.refresh_token_expires_in || null,
   };
 }
 
@@ -148,9 +155,19 @@ export async function saveShopifyConnection(params: {
   shop: string;
   accessToken: string;
   scope: string;
+  expiresIn?: number | null;
+  refreshToken?: string | null;
+  refreshTokenExpiresIn?: number | null;
 }) {
   const encryptedToken = encryptToken(params.accessToken);
+  const encryptedRefreshToken = params.refreshToken ? encryptToken(params.refreshToken) : null;
   const connectedAt = new Date();
+  const accessTokenExpiresAt = params.expiresIn
+    ? new Date(Date.now() + params.expiresIn * 1000)
+    : null;
+  const refreshTokenExpiresAt = params.refreshTokenExpiresIn
+    ? new Date(Date.now() + params.refreshTokenExpiresIn * 1000)
+    : null;
 
   return prisma.$transaction(async (tx) => {
     const [storeForBusiness, storeForDomain] = await Promise.all([
@@ -172,6 +189,9 @@ export async function saveShopifyConnection(params: {
         data: {
           businessId: params.businessId,
           accessTokenEncrypted: encryptedToken,
+          refreshTokenEncrypted: encryptedRefreshToken,
+          accessTokenExpiresAt,
+          refreshTokenExpiresAt,
           scope: params.scope,
           status: "CONNECTED",
           connectedAt,
@@ -205,6 +225,88 @@ export async function saveShopifyConnection(params: {
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
+
+async function refreshShopifyAccessToken(store: {
+  id: string;
+  shopDomain: string;
+  accessTokenEncrypted: string;
+  refreshTokenEncrypted: string | null;
+  accessTokenExpiresAt: Date | null;
+}) {
+  const now = Date.now();
+  const needsRefresh =
+    !store.accessTokenExpiresAt ||
+    store.accessTokenExpiresAt.getTime() <= now + 5 * 60 * 1000;
+
+  if (!needsRefresh) return decryptToken(store.accessTokenEncrypted);
+
+  const currentAccessToken = decryptToken(store.accessTokenEncrypted);
+  const refreshToken = store.refreshTokenEncrypted
+    ? decryptToken(store.refreshTokenEncrypted)
+    : null;
+
+  const body = refreshToken
+    ? {
+        client_id: apiKey(),
+        client_secret: apiSecret(),
+        grant_type: "refresh_token",
+        refresh_token: refreshToken,
+      }
+    : {
+        client_id: apiKey(),
+        client_secret: apiSecret(),
+        grant_type: "token_exchange",
+        subject_token: currentAccessToken,
+        subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
+        requested_token_type: "urn:shopify:params:oauth:token-type:offline-access-token",
+      };
+
+  const response = await fetch(`https://${store.shopDomain}/admin/oauth/access_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    cache: "no-store",
+  });
+
+  const data = (await response.json()) as {
+    access_token?: string;
+    expires_in?: number;
+    refresh_token?: string;
+    refresh_token_expires_in?: number;
+    error?: string;
+    error_description?: string;
+  };
+
+  if (!response.ok || !data.access_token) {
+    throw new Error(
+      data.error_description ||
+        data.error ||
+        "Shopify access token refresh failed. Reconnect Shopify and try again.",
+    );
+  }
+
+  const accessTokenExpiresAt = data.expires_in
+    ? new Date(Date.now() + data.expires_in * 1000)
+    : null;
+  const refreshTokenExpiresAt = data.refresh_token_expires_in
+    ? new Date(Date.now() + data.refresh_token_expires_in * 1000)
+    : null;
+
+  await prisma.shopifyStore.update({
+    where: { id: store.id },
+    data: {
+      accessTokenEncrypted: encryptToken(data.access_token),
+      refreshTokenEncrypted: data.refresh_token
+        ? encryptToken(data.refresh_token)
+        : store.refreshTokenEncrypted,
+      accessTokenExpiresAt,
+      refreshTokenExpiresAt,
+    },
+  });
+
+  return data.access_token;
+}
+
 
 async function graphql<T>(shop: string, token: string, query: string, variables: Record<string, unknown>) {
   let lastError = "Shopify API request failed.";
@@ -521,7 +623,7 @@ export async function syncShopifyCatalog(businessId: string) {
   if (limit <= 0) throw new Error("Shopify integration requires Starter or higher.");
 
   const store = business.shopifyStore;
-  const token = decryptToken(store.accessTokenEncrypted);
+  const token = await refreshShopifyAccessToken(store);
   const agents = await prisma.agent.findMany({
     where: { businessId },
     select: { id: true },
