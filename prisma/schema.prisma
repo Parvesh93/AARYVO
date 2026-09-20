@@ -205,6 +205,9 @@ model ShopifyStore {
   businessId String @unique
   shopDomain String @unique
   accessTokenEncrypted String @db.Text
+  refreshTokenEncrypted String? @db.Text
+  accessTokenExpiresAt DateTime?
+  refreshTokenExpiresAt DateTime?
   scope String? @db.Text
   status String @default("CONNECTED")
   connectedAt DateTime @default(now())
