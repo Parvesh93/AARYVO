@@ -222,7 +222,9 @@ async function graphql<T>(shop: string, token: string, query: string, variables:
 
     const payload = (await response.json()) as {
       data?: T;
-      errors?: Array<{ message?: string; extensions?: { code?: string } }>;
+      errors?: unknown;
+      error?: unknown;
+      message?: unknown;
       extensions?: {
         cost?: {
           throttleStatus?: {
@@ -233,20 +235,71 @@ async function graphql<T>(shop: string, token: string, query: string, variables:
       };
     };
 
+    const normalizedErrors: Array<{
+      message?: string;
+      extensions?: { code?: string };
+    }> = Array.isArray(payload.errors)
+      ? payload.errors.map((error) => {
+          if (typeof error === "string") return { message: error };
+          if (error && typeof error === "object") {
+            const value = error as {
+              message?: unknown;
+              extensions?: { code?: unknown };
+            };
+            return {
+              message:
+                typeof value.message === "string"
+                  ? value.message
+                  : JSON.stringify(error),
+              extensions:
+                typeof value.extensions?.code === "string"
+                  ? { code: value.extensions.code }
+                  : undefined,
+            };
+          }
+          return { message: String(error) };
+        })
+      : payload.errors
+        ? [
+            {
+              message:
+                typeof payload.errors === "string"
+                  ? payload.errors
+                  : JSON.stringify(payload.errors),
+            },
+          ]
+        : [];
+
+    const fallbackApiError =
+      typeof payload.error === "string"
+        ? payload.error
+        : typeof payload.message === "string"
+          ? payload.message
+          : "";
+
     const throttled =
       response.status === 429 ||
-      payload.errors?.some(
+      normalizedErrors.some(
         (error) =>
           error.extensions?.code === "THROTTLED" ||
           /throttled/i.test(error.message || ""),
       );
 
-    if (!throttled && response.ok && !payload.errors?.length && payload.data) {
+    if (
+      !throttled &&
+      response.ok &&
+      normalizedErrors.length === 0 &&
+      payload.data
+    ) {
       return payload.data;
     }
 
     lastError =
-      payload.errors?.map((error) => error.message).filter(Boolean).join("; ") ||
+      normalizedErrors
+        .map((error) => error.message)
+        .filter(Boolean)
+        .join("; ") ||
+      fallbackApiError ||
       `Shopify API request failed (${response.status}).`;
 
     if (!throttled || attempt === 4) break;
