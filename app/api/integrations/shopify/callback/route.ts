@@ -35,6 +35,9 @@ export async function GET(request: Request) {
       shop,
       accessToken: token.accessToken,
       scope: token.scope,
+      expiresIn: token.expiresIn,
+      refreshToken: token.refreshToken,
+      refreshTokenExpiresIn: token.refreshTokenExpiresIn,
     });
 
     const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
