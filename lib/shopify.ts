@@ -1478,6 +1478,37 @@ export async function cancelShopifyPricingSubscription(params: {
   };
 }
 
+export async function inspectShopifyPricingState(businessId: string) {
+  const state = await readShopifyPricingState(businessId);
+
+  if (!state.managed) {
+    return {
+      managed: false as const,
+      reason: state.reason,
+      subscription: null,
+      active: false,
+      cancelAtEnd: false,
+      handle: null as string | null,
+    };
+  }
+
+  const subscription = state.subscription;
+  const handle =
+    subscription?.items
+      .find((item) =>
+        ["starter", "growth", "pro"].includes(item.handle.toLowerCase()),
+      )
+      ?.handle.toLowerCase() || null;
+
+  return {
+    managed: true as const,
+    subscription,
+    active: Boolean(subscription && handle),
+    cancelAtEnd: Boolean(subscription?.cancelAtEndOfCycle),
+    handle,
+  };
+}
+
 export async function syncShopifyPricingState(businessId: string) {
   const state = await readShopifyPricingState(businessId);
 
