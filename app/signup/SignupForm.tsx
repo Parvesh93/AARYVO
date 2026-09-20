@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function SignupForm() {
+export default function SignupForm({ next }: { next?: string }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -25,7 +25,7 @@ export default function SignupForm() {
         setError(data.error || "Account could not be created.");
         return;
       }
-      router.push(data.redirectTo || "/onboarding");
+      router.push(next ? `/onboarding?next=${encodeURIComponent(next)}` : data.redirectTo || "/onboarding");
       router.refresh();
     } catch {
       setError("Could not connect to AARYVO. Please try again.");
