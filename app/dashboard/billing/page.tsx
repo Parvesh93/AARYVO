@@ -26,6 +26,7 @@ export default async function BillingPage({
   const shopifyManaged =
     Boolean(b.shopifyStore) &&
     !b.razorpaySubscriptionId;
+  const shopifyAvailable = !b.razorpaySubscriptionId;
 
   return <div className="mx-auto max-w-[1400px] pb-8">
     {query.shopifyPricing === "success" && (
@@ -50,6 +51,7 @@ export default async function BillingPage({
       cancelAtEnd={b.subscriptionCancelAtEnd}
       hasSubscription={Boolean(b.razorpaySubscriptionId) || shopifyManaged}
       billingProvider={shopifyManaged ? ("SHOPIFY" as const) : ("RAZORPAY" as const)}
+      shopifyAvailable={shopifyAvailable}
     />
   </div>;
 }
