@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   exchangeShopifyCode,
   getShopifyHostedPricingUrl,
+  inspectShopifyPricingState,
   normalizeShopDomain,
   registerShopifyUninstallWebhook,
   saveShopifyConnection,
@@ -66,17 +67,40 @@ export async function GET(request: Request) {
     }
 
     // OAuth only proves store ownership. It must never grant a paid AARYVO
-    // entitlement on its own. Ask Shopify for the real subscription state.
-    const pricingState = await syncShopifyPricingState(state.businessId);
+    // entitlement on its own. Read Shopify's canonical billing state first.
+    //
+    // Shopify can retain an old subscription record after uninstall. If that
+    // subscription is already scheduled to cancel, do not treat it as a fresh
+    // paid selection during reinstall: send the merchant through App Pricing.
+    const pricingState = await inspectShopifyPricingState(state.businessId);
 
-    if (pricingState.managed && pricingState.active) {
+    if (
+      pricingState.managed &&
+      pricingState.active &&
+      !pricingState.cancelAtEnd
+    ) {
+      await syncShopifyPricingState(state.businessId);
       const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
       redirectUrl.searchParams.set("shopify", "connected");
       return NextResponse.redirect(redirectUrl);
     }
 
-    // No active Shopify subscription: send the merchant straight to Shopify's
-    // hosted App Pricing page. AARYVO stays FREE until Shopify confirms a plan.
+    // No renewable Shopify subscription (or only a stale/cancelling one):
+    // keep AARYVO free and require a fresh Shopify plan selection.
+    await prisma.business.update({
+      where: { id: state.businessId },
+      data: {
+        plan: "FREE",
+        subscriptionStatus: "FREE",
+        monthlyConversationLimit: 50,
+        subscriptionCurrentStart: null,
+        subscriptionCurrentEnd: null,
+        subscriptionCancelAtEnd: false,
+        usagePeriodStart: null,
+        usagePeriodEnd: null,
+      },
+    });
+
     const pricing = await getShopifyHostedPricingUrl(state.businessId);
     return NextResponse.redirect(pricing.url);
   } catch (error) {
