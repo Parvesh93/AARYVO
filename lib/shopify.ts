@@ -981,7 +981,6 @@ async function fetchShopifyPricingSubscription(appId: string, shopId: string) {
   }
 
   const orgId = process.env.SHOPIFY_PARTNER_ORG_ID!.trim();
-  const appId = process.env.SHOPIFY_PARTNER_APP_ID!.trim();
   const response = await fetch(`https://partners.shopify.com/${orgId}/api/2026-07/graphql.json`, {
     method: "POST",
     headers: {
