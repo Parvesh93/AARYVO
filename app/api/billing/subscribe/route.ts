@@ -8,8 +8,17 @@ export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const member = await prisma.businessMember.findFirst({ where: { userId: session.userId }, include: { user: true, business: true } });
+  const member = await prisma.businessMember.findFirst({
+    where: { userId: session.userId },
+    include: { user: true, business: { include: { shopifyStore: { select: { id: true } } } } },
+  });
   if (!member) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+  if (member.business.shopifyStore) {
+    return NextResponse.json(
+      { error: "This workspace is connected to Shopify. Manage your AARYVO subscription through Shopify." },
+      { status: 409 },
+    );
+  }
   if (!razorpayConfigured()) return NextResponse.json({ error: "Billing is not configured yet." }, { status: 503 });
 
   const body = await request.json();
