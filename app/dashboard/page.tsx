@@ -75,17 +75,26 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   if (!membership) redirect("/onboarding");
 
   if (query.shop && query.plan_handle) {
+    let pricingError: string | null = null;
+
     try {
       await syncShopifyPricingSubscription({
         businessId: membership.business.id,
         shop: query.shop,
         expectedPlanHandle: query.plan_handle,
       });
-      redirect("/dashboard/billing?shopifyPricing=success");
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to verify Shopify plan.";
-      redirect(`/dashboard/billing?shopifyPricing=error&message=${encodeURIComponent(message)}`);
+      pricingError =
+        error instanceof Error ? error.message : "Unable to verify Shopify plan.";
     }
+
+    if (pricingError) {
+      redirect(
+        `/dashboard/billing?shopifyPricing=error&message=${encodeURIComponent(pricingError)}`,
+      );
+    }
+
+    redirect("/dashboard/billing?shopifyPricing=success");
   }
 
   const business = membership.business;
