@@ -840,3 +840,143 @@ export async function disconnectShopify(businessId: string) {
   if (!store) return;
   await prisma.shopifyStore.delete({ where: { id: store.id } });
 }
+
+
+type ShopifyPricingSubscription = {
+  shop: { id: string; myshopifyDomain: string };
+  billingPeriod: "EVERY_30_DAYS" | "ANNUAL";
+  cancelAtEndOfCycle: boolean;
+  trialEndsAt: string | null;
+  currentBillingCycle: { startTime: string; endTime: string } | null;
+  items: Array<{ handle: string; description: string | null }>;
+};
+
+function partnerPricingConfigured() {
+  return Boolean(
+    process.env.SHOPIFY_PARTNER_ORG_ID?.trim() &&
+      process.env.SHOPIFY_PARTNER_API_ACCESS_TOKEN?.trim() &&
+      process.env.SHOPIFY_PARTNER_APP_ID?.trim(),
+  );
+}
+
+export function shopifyPricingPageUrl(shopDomain: string) {
+  const appHandle = process.env.SHOPIFY_APP_HANDLE?.trim();
+  if (!appHandle) return null;
+  const storeHandle = normalizeShopDomain(shopDomain).replace(/\.myshopify\.com$/, "");
+  return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
+}
+
+async function getShopifyShopGid(shopDomain: string, token: string) {
+  const response = await fetch(`https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": token,
+    },
+    body: JSON.stringify({ query: "query AaryvoShopId { shop { id } }" }),
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as {
+    data?: { shop?: { id?: string } };
+    errors?: Array<{ message?: string }>;
+  };
+  const shopId = payload.data?.shop?.id;
+  if (!response.ok || !shopId) {
+    throw new Error(payload.errors?.[0]?.message || "Unable to identify the connected Shopify store.");
+  }
+  return shopId;
+}
+
+async function fetchShopifyPricingSubscription(shopId: string) {
+  if (!partnerPricingConfigured()) {
+    throw new Error("Shopify App Pricing verification is not configured on AARYVO.");
+  }
+
+  const orgId = process.env.SHOPIFY_PARTNER_ORG_ID!.trim();
+  const appId = process.env.SHOPIFY_PARTNER_APP_ID!.trim();
+  const response = await fetch(`https://partners.shopify.com/${orgId}/api/2026-07/graphql.json`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Shopify-Access-Token": process.env.SHOPIFY_PARTNER_API_ACCESS_TOKEN!.trim(),
+    },
+    body: JSON.stringify({
+      query: `query AaryvoActiveSubscription($appId: ID!, $shopId: ID!) {
+        activeSubscription(appId: $appId, shopId: $shopId) {
+          shop { id myshopifyDomain }
+          billingPeriod
+          cancelAtEndOfCycle
+          trialEndsAt
+          currentBillingCycle { startTime endTime }
+          items { handle description }
+        }
+      }`,
+      variables: { appId, shopId },
+    }),
+    cache: "no-store",
+  });
+
+  const payload = (await response.json()) as {
+    data?: { activeSubscription?: ShopifyPricingSubscription | null };
+    errors?: Array<{ message?: string }>;
+  };
+  if (!response.ok || payload.errors?.length) {
+    throw new Error(payload.errors?.[0]?.message || "Unable to verify Shopify App Pricing subscription.");
+  }
+  return payload.data?.activeSubscription || null;
+}
+
+export async function syncShopifyPricingSubscription(params: {
+  businessId: string;
+  shop: string;
+  expectedPlanHandle?: string | null;
+}) {
+  const shop = normalizeShopDomain(params.shop);
+  const store = await prisma.shopifyStore.findUnique({
+    where: { businessId: params.businessId },
+  });
+  if (!store || store.shopDomain !== shop) {
+    throw new Error("This Shopify store is not connected to the current AARYVO workspace.");
+  }
+
+  const token = await refreshShopifyAccessToken(store);
+  const shopId = await getShopifyShopGid(store.shopDomain, token);
+  const subscription = await fetchShopifyPricingSubscription(shopId);
+  if (!subscription) throw new Error("No active Shopify App Pricing subscription was found.");
+
+  const handle = subscription.items.find((item) =>
+    ["starter", "growth", "pro"].includes(item.handle.toLowerCase()),
+  )?.handle.toLowerCase();
+  if (!handle) throw new Error("The active Shopify subscription does not map to an AARYVO plan.");
+  if (params.expectedPlanHandle && params.expectedPlanHandle.toLowerCase() !== handle) {
+    throw new Error("Shopify returned a different active plan than the selected plan.");
+  }
+
+  const plan = handle.toUpperCase() as "STARTER" | "GROWTH" | "PRO";
+  const limits = { STARTER: 500, GROWTH: 2000, PRO: 5000 } as const;
+  const now = new Date();
+  const periodStart = subscription.currentBillingCycle?.startTime
+    ? new Date(subscription.currentBillingCycle.startTime)
+    : now;
+  const periodEnd = subscription.currentBillingCycle?.endTime
+    ? new Date(subscription.currentBillingCycle.endTime)
+    : subscription.trialEndsAt
+      ? new Date(subscription.trialEndsAt)
+      : null;
+
+  await prisma.business.update({
+    where: { id: params.businessId },
+    data: {
+      plan,
+      subscriptionStatus: "active",
+      monthlyConversationLimit: limits[plan],
+      subscriptionCurrentStart: periodStart,
+      subscriptionCurrentEnd: periodEnd,
+      usagePeriodStart: periodStart,
+      usagePeriodEnd: periodEnd,
+      subscriptionCancelAtEnd: subscription.cancelAtEndOfCycle,
+    },
+  });
+
+  return { plan, handle, subscription };
+}
