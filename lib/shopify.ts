@@ -859,6 +859,78 @@ function partnerPricingConfigured() {
   );
 }
 
+
+export function isShopifyPartnerPricingConfigured() {
+  return partnerPricingConfigured();
+}
+
+export async function testShopifyPartnerPricingConnection() {
+  if (!partnerPricingConfigured()) {
+    throw new Error(
+      "Add SHOPIFY_PARTNER_ORG_ID, SHOPIFY_PARTNER_APP_ID and SHOPIFY_PARTNER_API_ACCESS_TOKEN first.",
+    );
+  }
+
+  const orgId = process.env.SHOPIFY_PARTNER_ORG_ID!.trim();
+  const appId = process.env.SHOPIFY_PARTNER_APP_ID!.trim();
+  const response = await fetch(
+    `https://partners.shopify.com/${orgId}/api/2026-07/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token":
+          process.env.SHOPIFY_PARTNER_API_ACCESS_TOKEN!.trim(),
+      },
+      body: JSON.stringify({
+        query: `query AaryvoPartnerApp($appId: ID!) {
+          app(id: $appId) {
+            id
+            name
+          }
+        }`,
+        variables: { appId },
+      }),
+      cache: "no-store",
+    },
+  );
+
+  const raw = await response.text();
+  let payload: {
+    data?: { app?: { id?: string; name?: string } | null };
+    errors?: Array<{ message?: string }>;
+  } = {};
+
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(
+      `Shopify Partner API returned an invalid response (${response.status}).`,
+    );
+  }
+
+  if (!response.ok || payload.errors?.length) {
+    throw new Error(
+      payload.errors?.map((error) => error.message).filter(Boolean).join("; ") ||
+        `Shopify Partner API request failed (${response.status}).`,
+    );
+  }
+
+  const app = payload.data?.app;
+  if (!app?.id) {
+    throw new Error(
+      "Partner API connected, but the configured SHOPIFY_PARTNER_APP_ID was not found.",
+    );
+  }
+
+  return {
+    ok: true,
+    appId: app.id,
+    appName: app.name || "AARYVO",
+    orgId,
+  };
+}
+
 export function shopifyPricingPageUrl(shopDomain: string) {
   const appHandle = process.env.SHOPIFY_APP_HANDLE?.trim();
   if (!appHandle) return null;
