@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import {
   exchangeShopifyCode,
   normalizeShopDomain,
+  registerShopifyUninstallWebhook,
   saveShopifyConnection,
   shopifyAppUrl,
   verifyShopifyCallbackHmac,
@@ -39,6 +40,15 @@ export async function GET(request: Request) {
       refreshToken: token.refreshToken,
       refreshTokenExpiresIn: token.refreshTokenExpiresIn,
     });
+
+    // Register app/uninstalled immediately while the installation token is valid.
+    // A failed registration should not invalidate a successful OAuth connection,
+    // but it is logged so it can be corrected before App Store submission.
+    try {
+      await registerShopifyUninstallWebhook(shop, token.accessToken);
+    } catch (webhookError) {
+      console.error("Shopify uninstall webhook registration failed:", webhookError);
+    }
 
     const redirectUrl = new URL("/dashboard/integrations", shopifyAppUrl());
     redirectUrl.searchParams.set("shopify", "connected");
