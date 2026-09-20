@@ -11,7 +11,14 @@ export default async function BillingPage({
 }) {
   const session = await requireSession();
   const query = await searchParams;
-  const member = await prisma.businessMember.findFirst({ where: { userId: session.userId }, include: { business: true } });
+  const member = await prisma.businessMember.findFirst({
+    where: { userId: session.userId },
+    include: {
+      business: {
+        include: { shopifyStore: true },
+      },
+    },
+  });
   if (!member) redirect("/onboarding");
 
   const b = member.business;
@@ -44,7 +51,7 @@ export default async function BillingPage({
       currentPeriodEnd={b.subscriptionCurrentEnd?.toISOString() || null}
       cancelAtEnd={b.subscriptionCancelAtEnd}
       hasSubscription={Boolean(b.razorpaySubscriptionId) || shopifyManaged}
-      billingProvider={shopifyManaged ? "SHOPIFY" : "RAZORPAY"}
+      billingProvider={shopifyManaged ? ("SHOPIFY" as const) : ("RAZORPAY" as const)}
     />
   </div>;
 }
