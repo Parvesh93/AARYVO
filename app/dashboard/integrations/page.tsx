@@ -36,7 +36,12 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   if (shopifyState === "error") notice = messageParam || "Unable to connect Shopify.";
 
   const business = member.business;
-  const shopifyEnabled = hasFeature(business.plan, "shopifyIntegration");
+  // Store connection must be available before a Shopify merchant chooses a
+  // paid plan; otherwise a Free merchant is forced into the direct Razorpay
+  // checkout before AARYVO can know that Shopify should own the billing.
+  const shopifyEnabled =
+    hasFeature(business.plan, "shopifyIntegration") ||
+    (!business.razorpaySubscriptionId && !business.shopifyStore);
   const productLimit = shopifyProductLimit(business.plan);
   const store = business.shopifyStore
     ? {
