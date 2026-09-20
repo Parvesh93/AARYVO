@@ -7,8 +7,17 @@ export async function POST() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const member = await prisma.businessMember.findFirst({ where: { userId: session.userId }, include: { business: true } });
+  const member = await prisma.businessMember.findFirst({
+    where: { userId: session.userId },
+    include: { business: { include: { shopifyStore: { select: { id: true } } } } },
+  });
   if (!member) return NextResponse.json({ error: "Workspace not found" }, { status: 404 });
+  if (member.business.shopifyStore) {
+    return NextResponse.json(
+      { error: "This workspace is connected to Shopify. Manage cancellation through Shopify." },
+      { status: 409 },
+    );
+  }
 
   const business = member.business;
   if (!business.razorpaySubscriptionId || business.plan === "FREE") {
