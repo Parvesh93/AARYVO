@@ -182,14 +182,22 @@ export default function ShopifyIntegrationCard({
                     : "Partner API credentials are incomplete on the AARYVO server."}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={checkPricing}
-                disabled={!pricingConfigured || busy !== null}
-                className="shrink-0 rounded-full border border-black/10 bg-white px-4 py-2.5 text-xs font-semibold text-black/65 disabled:opacity-40"
-              >
-                {busy === "pricing" ? "Checking…" : "Verify App Pricing"}
-              </button>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={checkPricing}
+                  disabled={!pricingConfigured || busy !== null}
+                  className="rounded-full border border-black/10 bg-white px-4 py-2.5 text-xs font-semibold text-black/65 disabled:opacity-40"
+                >
+                  {busy === "pricing" ? "Checking…" : "Verify App Pricing"}
+                </button>
+                <a
+                  href="/api/integrations/shopify/pricing"
+                  className={`rounded-full bg-black px-4 py-2.5 text-xs font-semibold text-white ${!pricingConfigured ? "pointer-events-none opacity-40" : ""}`}
+                >
+                  Choose Shopify plan
+                </a>
+              </div>
             </div>
           </div>
 
