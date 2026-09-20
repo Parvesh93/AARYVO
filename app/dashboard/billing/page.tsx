@@ -16,6 +16,11 @@ export default async function BillingPage({
 
   const b = member.business;
   const quota = await getBusinessConversationUsage(b.id);
+  const shopifyManaged =
+    Boolean(b.shopifyStore) &&
+    !b.razorpaySubscriptionId &&
+    b.subscriptionStatus.toLowerCase() === "active" &&
+    ["STARTER", "GROWTH", "PRO"].includes(b.plan.toUpperCase());
 
   return <div className="mx-auto max-w-[1400px] pb-8">
     {query.shopifyPricing === "success" && (
@@ -38,7 +43,8 @@ export default async function BillingPage({
       subscriptionStatus={b.subscriptionStatus}
       currentPeriodEnd={b.subscriptionCurrentEnd?.toISOString() || null}
       cancelAtEnd={b.subscriptionCancelAtEnd}
-      hasSubscription={Boolean(b.razorpaySubscriptionId)}
+      hasSubscription={Boolean(b.razorpaySubscriptionId) || shopifyManaged}
+      billingProvider={shopifyManaged ? "SHOPIFY" : "RAZORPAY"}
     />
   </div>;
 }
