@@ -53,6 +53,7 @@ model Business {
   smtpFromEmail String?
   plan String @default("FREE")
   subscriptionStatus String @default("FREE")
+  billingChannel String @default("DIRECT")
   razorpaySubscriptionId String? @unique
   razorpayPlanId String?
   subscriptionCurrentStart DateTime?
