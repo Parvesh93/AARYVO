@@ -203,6 +203,7 @@ export async function cleanupShopifyAfterUninstall(shopInput: string) {
       business: {
         select: {
           id: true,
+          billingChannel: true,
           razorpaySubscriptionId: true,
         },
       },
@@ -247,6 +248,7 @@ export async function cleanupShopifyAfterUninstall(shopInput: string) {
         data: {
           plan: "FREE",
           subscriptionStatus: "FREE",
+          billingChannel: "SHOPIFY",
           monthlyConversationLimit: 50,
           subscriptionCurrentStart: null,
           subscriptionCurrentEnd: null,
