@@ -17,6 +17,7 @@ type Props = {
   };
   productLimit: number;
   notice?: string | null;
+  pricingConfigured?: boolean;
 };
 
 export default function ShopifyIntegrationCard({
@@ -26,10 +27,11 @@ export default function ShopifyIntegrationCard({
   store,
   productLimit,
   notice,
+  pricingConfigured = false,
 }: Props) {
   const router = useRouter();
   const [shop, setShop] = useState("");
-  const [busy, setBusy] = useState<"sync" | "disconnect" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "disconnect" | "pricing" | null>(null);
   const [message, setMessage] = useState(notice || "");
 
   async function sync() {
@@ -47,6 +49,32 @@ export default function ShopifyIntegrationCard({
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Shopify sync failed.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function checkPricing() {
+    setBusy("pricing");
+    setMessage("");
+    try {
+      const response = await fetch("/api/integrations/shopify/pricing-check", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Unable to verify Shopify App Pricing.");
+      }
+      setMessage(
+        `Shopify App Pricing verified: ${data.appName} (${data.appId}). Partner API authentication is working.`,
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to verify Shopify App Pricing.",
+      );
     } finally {
       setBusy(null);
     }
@@ -143,6 +171,27 @@ export default function ShopifyIntegrationCard({
               {store.lastSyncError}
             </div>
           )}
+
+          <div className="mt-5 rounded-2xl border border-black/[.06] bg-[#f7f8f9] p-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold">Shopify App Pricing</p>
+                <p className="mt-1 text-[11px] leading-5 text-black/45">
+                  {pricingConfigured
+                    ? "Partner API credentials are configured. Run the check before enabling App Pricing in Shopify."
+                    : "Partner API credentials are incomplete on the AARYVO server."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={checkPricing}
+                disabled={!pricingConfigured || busy !== null}
+                className="shrink-0 rounded-full border border-black/10 bg-white px-4 py-2.5 text-xs font-semibold text-black/65 disabled:opacity-40"
+              >
+                {busy === "pricing" ? "Checking…" : "Verify App Pricing"}
+              </button>
+            </div>
+          </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
             <button
