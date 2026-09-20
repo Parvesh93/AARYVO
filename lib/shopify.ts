@@ -1097,32 +1097,81 @@ async function fetchShopifyPricingSubscription(appId: string, shopId: string) {
   return payload.data?.activeSubscription || null;
 }
 
-export async function syncShopifyPricingSubscription(params: {
-  businessId: string;
-  shop: string;
-  expectedPlanHandle?: string | null;
-}) {
-  const shop = normalizeShopDomain(params.shop);
-  const store = await prisma.shopifyStore.findUnique({
-    where: { businessId: params.businessId },
+async function readShopifyPricingState(businessId: string) {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: {
+      razorpaySubscriptionId: true,
+      shopifyStore: true,
+    },
   });
-  if (!store || store.shopDomain !== shop) {
-    throw new Error("This Shopify store is not connected to the current AARYVO workspace.");
+
+  if (!business?.shopifyStore) {
+    return { managed: false as const, reason: "not_connected" as const };
   }
 
+  if (business.razorpaySubscriptionId) {
+    return { managed: false as const, reason: "razorpay_managed" as const };
+  }
+
+  const store = business.shopifyStore;
   const token = await refreshShopifyAccessToken(store);
   const billingIds = await getShopifyBillingIds(store.shopDomain, token);
   const subscription = await fetchShopifyPricingSubscription(
     billingIds.appId,
     billingIds.shopId,
   );
-  if (!subscription) throw new Error("No active Shopify App Pricing subscription was found.");
+
+  return {
+    managed: true as const,
+    store,
+    subscription,
+  };
+}
+
+async function applyShopifyPricingState(params: {
+  businessId: string;
+  subscription: ShopifyPricingSubscription | null;
+  expectedPlanHandle?: string | null;
+}) {
+  const subscription = params.subscription;
+
+  if (!subscription) {
+    await prisma.business.update({
+      where: { id: params.businessId },
+      data: {
+        plan: "FREE",
+        subscriptionStatus: "FREE",
+        monthlyConversationLimit: 50,
+        subscriptionCurrentStart: null,
+        subscriptionCurrentEnd: null,
+        subscriptionCancelAtEnd: false,
+        usagePeriodStart: null,
+        usagePeriodEnd: null,
+      },
+    });
+
+    return {
+      plan: "FREE" as const,
+      handle: null,
+      subscription: null,
+      active: false,
+      cancelAtEnd: false,
+    };
+  }
 
   const handle = subscription.items.find((item) =>
     ["starter", "growth", "pro"].includes(item.handle.toLowerCase()),
   )?.handle.toLowerCase();
-  if (!handle) throw new Error("The active Shopify subscription does not map to an AARYVO plan.");
-  if (params.expectedPlanHandle && params.expectedPlanHandle.toLowerCase() !== handle) {
+
+  if (!handle) {
+    throw new Error("The active Shopify subscription does not map to an AARYVO plan.");
+  }
+
+  if (
+    params.expectedPlanHandle &&
+    params.expectedPlanHandle.toLowerCase() !== handle
+  ) {
     throw new Error("Shopify returned a different active plan than the selected plan.");
   }
 
@@ -1152,5 +1201,64 @@ export async function syncShopifyPricingSubscription(params: {
     },
   });
 
-  return { plan, handle, subscription };
+  return {
+    plan,
+    handle,
+    subscription,
+    active: true,
+    cancelAtEnd: subscription.cancelAtEndOfCycle,
+  };
+}
+
+export async function syncShopifyPricingState(businessId: string) {
+  const state = await readShopifyPricingState(businessId);
+
+  if (!state.managed) {
+    return {
+      managed: false as const,
+      reason: state.reason,
+    };
+  }
+
+  const applied = await applyShopifyPricingState({
+    businessId,
+    subscription: state.subscription,
+  });
+
+  return {
+    managed: true as const,
+    ...applied,
+  };
+}
+
+export async function syncShopifyPricingSubscription(params: {
+  businessId: string;
+  shop: string;
+  expectedPlanHandle?: string | null;
+}) {
+  const shop = normalizeShopDomain(params.shop);
+  const store = await prisma.shopifyStore.findUnique({
+    where: { businessId: params.businessId },
+  });
+
+  if (!store || store.shopDomain !== shop) {
+    throw new Error("This Shopify store is not connected to the current AARYVO workspace.");
+  }
+
+  const state = await readShopifyPricingState(params.businessId);
+  if (!state.managed) {
+    throw new Error("This workspace is not managed by Shopify App Pricing.");
+  }
+
+  const applied = await applyShopifyPricingState({
+    businessId: params.businessId,
+    subscription: state.subscription,
+    expectedPlanHandle: params.expectedPlanHandle,
+  });
+
+  if (!applied.active) {
+    throw new Error("No active Shopify App Pricing subscription was found.");
+  }
+
+  return applied;
 }
