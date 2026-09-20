@@ -872,7 +872,6 @@ export async function testShopifyPartnerPricingConnection() {
   }
 
   const orgId = process.env.SHOPIFY_PARTNER_ORG_ID!.trim();
-  const appId = process.env.SHOPIFY_PARTNER_APP_ID!.trim();
   const response = await fetch(
     `https://partners.shopify.com/${orgId}/api/2026-07/graphql.json`,
     {
@@ -938,28 +937,45 @@ export function shopifyPricingPageUrl(shopDomain: string) {
   return `https://admin.shopify.com/store/${storeHandle}/charges/${appHandle}/pricing_plans`;
 }
 
-async function getShopifyShopGid(shopDomain: string, token: string) {
+async function getShopifyBillingIds(shopDomain: string, token: string) {
   const response = await fetch(`https://${shopDomain}/admin/api/${API_VERSION}/graphql.json`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Shopify-Access-Token": token,
     },
-    body: JSON.stringify({ query: "query AaryvoShopId { shop { id } }" }),
+    body: JSON.stringify({
+      query: `query AaryvoBillingIds {
+        shop { id }
+        app { id apiKey title }
+      }`,
+    }),
     cache: "no-store",
   });
   const payload = (await response.json()) as {
-    data?: { shop?: { id?: string } };
+    data?: {
+      shop?: { id?: string };
+      app?: { id?: string; apiKey?: string; title?: string };
+    };
     errors?: Array<{ message?: string }>;
   };
   const shopId = payload.data?.shop?.id;
-  if (!response.ok || !shopId) {
-    throw new Error(payload.errors?.[0]?.message || "Unable to identify the connected Shopify store.");
+  const appId = payload.data?.app?.id;
+  if (!response.ok || !shopId || !appId) {
+    throw new Error(
+      payload.errors?.[0]?.message ||
+        "Unable to identify the connected Shopify store and app.",
+    );
   }
-  return shopId;
+  return {
+    shopId,
+    appId,
+    appName: payload.data?.app?.title || "AARYVO",
+    apiKey: payload.data?.app?.apiKey || "",
+  };
 }
 
-async function fetchShopifyPricingSubscription(shopId: string) {
+async function fetchShopifyPricingSubscription(appId: string, shopId: string) {
   if (!partnerPricingConfigured()) {
     throw new Error("Shopify App Pricing verification is not configured on AARYVO.");
   }
@@ -1012,8 +1028,11 @@ export async function syncShopifyPricingSubscription(params: {
   }
 
   const token = await refreshShopifyAccessToken(store);
-  const shopId = await getShopifyShopGid(store.shopDomain, token);
-  const subscription = await fetchShopifyPricingSubscription(shopId);
+  const billingIds = await getShopifyBillingIds(store.shopDomain, token);
+  const subscription = await fetchShopifyPricingSubscription(
+    billingIds.appId,
+    billingIds.shopId,
+  );
   if (!subscription) throw new Error("No active Shopify App Pricing subscription was found.");
 
   const handle = subscription.items.find((item) =>
