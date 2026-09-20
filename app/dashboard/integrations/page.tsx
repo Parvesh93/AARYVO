@@ -44,6 +44,11 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
     (!business.razorpaySubscriptionId && !business.shopifyStore);
   const productLimit = shopifyProductLimit(business.plan);
   const shopifySyncEnabled = hasFeature(business.plan, "shopifyIntegration");
+  const shopifyInstallUrl =
+    process.env.SHOPIFY_APP_STORE_URL?.trim() ||
+    (process.env.SHOPIFY_APP_HANDLE?.trim()
+      ? `https://apps.shopify.com/${process.env.SHOPIFY_APP_HANDLE.trim()}`
+      : null);
   const store = business.shopifyStore
     ? {
         shopDomain: business.shopifyStore.shopDomain,
@@ -73,6 +78,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           notice={notice}
           pricingConfigured={isShopifyPartnerPricingConfigured()}
           syncEnabled={shopifySyncEnabled}
+          installUrl={shopifyInstallUrl}
         />
 
         <div className="grid gap-4 md:grid-cols-2">
