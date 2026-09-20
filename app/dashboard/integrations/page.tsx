@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { hasFeature } from "@/lib/plan-entitlements";
-import { isShopifyConfigured, shopifyProductLimit } from "@/lib/shopify";
+import { isShopifyConfigured, isShopifyPartnerPricingConfigured, shopifyProductLimit } from "@/lib/shopify";
 import ShopifyIntegrationCard from "./ShopifyIntegrationCard";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
@@ -65,6 +65,7 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
           store={store}
           productLimit={productLimit}
           notice={notice}
+          pricingConfigured={isShopifyPartnerPricingConfigured()}
         />
 
         <div className="grid gap-4 md:grid-cols-2">
