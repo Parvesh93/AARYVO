@@ -978,7 +978,7 @@ export async function syncShopifyCatalog(businessId: string) {
 export async function disconnectShopify(businessId: string) {
   const store = await prisma.shopifyStore.findUnique({ where: { businessId } });
   if (!store) return;
-  await prisma.shopifyStore.delete({ where: { id: store.id } });
+  await cleanupShopifyAfterUninstall(store.shopDomain);
 }
 
 
