@@ -18,6 +18,7 @@ type Props = {
   productLimit: number;
   notice?: string | null;
   pricingConfigured?: boolean;
+  syncEnabled?: boolean;
 };
 
 export default function ShopifyIntegrationCard({
@@ -28,6 +29,7 @@ export default function ShopifyIntegrationCard({
   productLimit,
   notice,
   pricingConfigured = false,
+  syncEnabled = false,
 }: Props) {
   const router = useRouter();
   const [shop, setShop] = useState("");
@@ -202,13 +204,22 @@ export default function ShopifyIntegrationCard({
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
-            <button
-              onClick={sync}
-              disabled={busy !== null}
-              className="rounded-full bg-black px-5 py-2.5 text-xs font-semibold text-white disabled:opacity-50"
-            >
-              {busy === "sync" ? "Syncing catalogue…" : store.productCount ? "Sync again" : "Sync catalogue"}
-            </button>
+            {syncEnabled ? (
+              <button
+                onClick={sync}
+                disabled={busy !== null}
+                className="rounded-full bg-black px-5 py-2.5 text-xs font-semibold text-white disabled:opacity-50"
+              >
+                {busy === "sync" ? "Syncing catalogue…" : store.productCount ? "Sync again" : "Sync catalogue"}
+              </button>
+            ) : (
+              <a
+                href="/api/integrations/shopify/pricing"
+                className="rounded-full bg-black px-5 py-2.5 text-xs font-semibold text-white"
+              >
+                Choose Shopify plan to sync
+              </a>
+            )}
             <button
               onClick={disconnect}
               disabled={busy !== null}
