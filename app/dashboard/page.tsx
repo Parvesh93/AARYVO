@@ -14,9 +14,16 @@ import {
 } from "lucide-react";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { syncShopifyPricingSubscription } from "@/lib/shopify";
 
 type DashboardProps = {
-  searchParams: Promise<{ knowledge?: string; pages?: string; message?: string }>;
+  searchParams: Promise<{
+    knowledge?: string;
+    pages?: string;
+    message?: string;
+    shop?: string;
+    plan_handle?: string;
+  }>;
 };
 
 function statusClasses(status: string) {
@@ -66,6 +73,20 @@ export default async function DashboardPage({ searchParams }: DashboardProps) {
   });
 
   if (!membership) redirect("/onboarding");
+
+  if (query.shop && query.plan_handle) {
+    try {
+      await syncShopifyPricingSubscription({
+        businessId: membership.business.id,
+        shop: query.shop,
+        expectedPlanHandle: query.plan_handle,
+      });
+      redirect("/dashboard/billing?shopifyPricing=success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to verify Shopify plan.";
+      redirect(`/dashboard/billing?shopifyPricing=error&message=${encodeURIComponent(message)}`);
+    }
+  }
 
   const business = membership.business;
   const agent = business.agents[0];
