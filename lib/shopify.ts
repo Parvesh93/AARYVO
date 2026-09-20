@@ -1210,6 +1210,123 @@ async function applyShopifyPricingState(params: {
   };
 }
 
+export async function cancelShopifyPricingSubscription(params: {
+  businessId: string;
+  deferCancellation?: boolean;
+}) {
+  const state = await readShopifyPricingState(params.businessId);
+
+  if (!state.managed) {
+    throw new Error("This workspace is not managed by Shopify App Pricing.");
+  }
+
+  if (!state.subscription) {
+    throw new Error("No active Shopify App Pricing subscription was found.");
+  }
+
+  const store = state.store;
+  const token = await refreshShopifyAccessToken(store);
+  const billingIds = await getShopifyBillingIds(store.shopDomain, token);
+  const orgId = process.env.SHOPIFY_PARTNER_ORG_ID!.trim();
+
+  const response = await fetch(
+    `https://partners.shopify.com/${orgId}/api/2026-07/graphql.json`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Shopify-Access-Token":
+          process.env.SHOPIFY_PARTNER_API_ACCESS_TOKEN!.trim(),
+      },
+      body: JSON.stringify({
+        query: `mutation AaryvoCancelSubscription(
+          $appId: ID!
+          $shopId: ID!
+          $deferCancellation: Boolean!
+          $prorate: Boolean!
+          $skipFinalUsageCharge: Boolean!
+        ) {
+          appSubscriptionCancel(
+            appId: $appId
+            shopId: $shopId
+            deferCancellation: $deferCancellation
+            prorate: $prorate
+            skipFinalUsageCharge: $skipFinalUsageCharge
+          ) {
+            appSubscription {
+              cancelAtEndOfCycle
+              currentBillingCycle {
+                startTime
+                endTime
+              }
+              items {
+                handle
+                description
+              }
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }`,
+        variables: {
+          appId: billingIds.appId,
+          shopId: billingIds.shopId,
+          deferCancellation: params.deferCancellation ?? true,
+          prorate: false,
+          skipFinalUsageCharge: false,
+        },
+      }),
+      cache: "no-store",
+    },
+  );
+
+  const payload = (await response.json()) as {
+    data?: {
+      appSubscriptionCancel?: {
+        appSubscription?: ShopifyPricingSubscription | null;
+        userErrors?: Array<{ field?: string[] | null; message?: string }>;
+      };
+    };
+    errors?: Array<{ message?: string }>;
+  };
+
+  if (!response.ok || payload.errors?.length) {
+    throw new Error(
+      payload.errors?.map((error) => error.message).filter(Boolean).join("; ") ||
+        "Unable to cancel Shopify App Pricing subscription.",
+    );
+  }
+
+  const result = payload.data?.appSubscriptionCancel;
+  if (result?.userErrors?.length) {
+    throw new Error(
+      result.userErrors
+        .map((error) => error.message)
+        .filter(Boolean)
+        .join("; ") || "Shopify rejected the cancellation request.",
+    );
+  }
+
+  const subscription = result?.appSubscription ?? null;
+
+  if (subscription) {
+    await applyShopifyPricingState({
+      businessId: params.businessId,
+      subscription,
+    });
+  } else {
+    await syncShopifyPricingState(params.businessId);
+  }
+
+  return {
+    ok: true,
+    deferred: params.deferCancellation ?? true,
+    subscription,
+  };
+}
+
 export async function syncShopifyPricingState(businessId: string) {
   const state = await readShopifyPricingState(businessId);
 
