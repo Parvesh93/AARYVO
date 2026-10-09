@@ -1,0 +1,19 @@
+# STAGING ONLY — link to a separate development app, never the live AARYVO app yet.
+name = "AARYVO Shopify Staging"
+client_id = ""
+embedded = true
+
+[access_scopes]
+scopes = "read_products,read_inventory"
+use_legacy_install_flow = false
+
+[webhooks]
+api_version = "2026-10"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled"]
+uri = "/webhooks/app/uninstalled"
+
+[[webhooks.subscriptions]]
+topics = ["app/scopes_update"]
+uri = "/webhooks/app/scopes_update"
