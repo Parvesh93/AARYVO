@@ -1,0 +1,38 @@
+name: Shopify Bridge Typecheck
+
+on:
+  push:
+    branches:
+      - feat/shopify-embedded-bridge
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "app/api/internal/shopify-bridge/**"
+      - "lib/prisma.ts"
+      - "prisma/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/shopify-bridge-typecheck.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    name: TypeScript and Prisma
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      DATABASE_URL: mysql://ci:ci@127.0.0.1:3306/aaryvo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dependencies and generate Prisma client
+        run: npm ci --no-audit --no-fund
+      - name: Check TypeScript
+        run: npx tsc --noEmit
