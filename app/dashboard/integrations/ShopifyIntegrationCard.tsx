@@ -34,7 +34,7 @@ export default function ShopifyIntegrationCard({
   installUrl = null,
 }: Props) {
   const router = useRouter();
-  const [busy, setBusy] = useState<"sync" | "disconnect" | "pricing" | null>(null);
+  const [busy, setBusy] = useState<"sync" | "disconnect" | null>(null);
   const [message, setMessage] = useState(notice || "");
 
   async function sync() {
@@ -52,32 +52,6 @@ export default function ShopifyIntegrationCard({
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Shopify sync failed.");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function checkPricing() {
-    setBusy("pricing");
-    setMessage("");
-    try {
-      const response = await fetch("/api/integrations/shopify/pricing-check", {
-        method: "GET",
-        cache: "no-store",
-      });
-      const data = await response.json();
-      if (!response.ok || !data.ok) {
-        throw new Error(data.error || "Unable to verify Shopify App Pricing.");
-      }
-      setMessage(
-        `Shopify App Pricing verified: ${data.appName} (${data.appId}). Partner API authentication is working.`,
-      );
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Unable to verify Shopify App Pricing.",
-      );
     } finally {
       setBusy(null);
     }
@@ -147,7 +121,7 @@ export default function ShopifyIntegrationCard({
         <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
           <p className="text-sm font-semibold">Shopify app credentials are not configured yet.</p>
           <p className="mt-1 text-xs leading-5 text-black/50">
-            Add SHOPIFY_API_KEY and SHOPIFY_API_SECRET to the AARYVO server before connecting stores.
+            Please contact AARYVO support to complete the Shopify connection setup.
           </p>
         </div>
       ) : store ? (
@@ -178,29 +152,23 @@ export default function ShopifyIntegrationCard({
           <div className="mt-5 rounded-2xl border border-black/[.06] bg-[#f7f8f9] p-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-xs font-semibold">Shopify App Pricing</p>
+                <p className="text-xs font-semibold">Plan &amp; billing</p>
                 <p className="mt-1 text-[11px] leading-5 text-black/45">
-                  {pricingConfigured
-                    ? "Partner API credentials are configured. Run the check before enabling App Pricing in Shopify."
-                    : "Partner API credentials are incomplete on the AARYVO server."}
+                  Choose or change your plan securely through Shopify.
                 </p>
               </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={checkPricing}
-                  disabled={!pricingConfigured || busy !== null}
-                  className="rounded-full border border-black/10 bg-white px-4 py-2.5 text-xs font-semibold text-black/65 disabled:opacity-40"
-                >
-                  {busy === "pricing" ? "Checking…" : "Verify App Pricing"}
-                </button>
+              {pricingConfigured ? (
                 <a
                   href="/api/integrations/shopify/pricing"
-                  className={`rounded-full bg-black px-4 py-2.5 text-xs font-semibold text-white ${!pricingConfigured ? "pointer-events-none opacity-40" : ""}`}
+                  className="shrink-0 rounded-full bg-black px-4 py-2.5 text-xs font-semibold text-white"
                 >
-                  Choose Shopify plan
+                  Manage Shopify plan
                 </a>
-              </div>
+              ) : (
+                <span className="text-xs text-black/45">
+                  Plan management is temporarily unavailable. Please contact support.
+                </span>
+              )}
             </div>
           </div>
 
@@ -245,7 +213,7 @@ export default function ShopifyIntegrationCard({
             </a>
           ) : (
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
-              Shopify App Store URL is not configured yet.
+              Open AARYVO from Shopify Admin if it is already installed. For a test store, install the app from the Shopify Dev Dashboard.
             </div>
           )}
           <p className="mt-3 text-[11px] text-black/35">
