@@ -32,7 +32,9 @@ jobs:
         with:
           node-version: "22"
           cache: npm
+      # The existing production package-lock currently lacks nodemailer entries;
+      # install as Hostinger does until the lockfile is reconciled separately.
       - name: Install dependencies and generate Prisma client
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
       - name: Check TypeScript
         run: npx tsc --noEmit
