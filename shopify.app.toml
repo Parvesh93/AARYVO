@@ -2,7 +2,7 @@
 
 client_id = "8bc76b5bbc5534235e7f30521d4af879"
 name = "AARYVO AI Shopping Assistant"
-application_url = "https://aaryvo.ppdesigntech.com"
+application_url = "https://aaryvo.ppdesigntech.com/shopify/launch"
 embedded = false
 
 [webhooks]
