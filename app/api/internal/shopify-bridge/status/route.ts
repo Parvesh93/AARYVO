@@ -96,7 +96,37 @@ export async function POST(request: Request) {
     });
 
     if (!store || store.business.billingChannel !== "SHOPIFY" || store.status !== "CONNECTED") {
-      return bridgeResponse({ connected: false, shop });
+      // New embedded-app installs may have a provisioned workspace before
+      // catalog token exchange. Do not report a store as fully connected.
+      const link = await prisma.shopifyMerchantLink.findFirst({
+        where: { shopDomain: shop },
+        select: {
+          business: {
+            select: {
+              name: true,
+              billingChannel: true,
+              plan: true,
+              subscriptionStatus: true,
+              monthlyConversationLimit: true,
+            },
+          },
+        },
+      });
+      if (link?.business.billingChannel === "SHOPIFY") {
+        return bridgeResponse({
+          connected: false,
+          provisioned: true,
+          shop,
+          workspace: {
+            name: link.business.name,
+            billingChannel: "SHOPIFY",
+            plan: link.business.plan,
+            subscriptionStatus: link.business.subscriptionStatus,
+            monthlyConversationLimit: link.business.monthlyConversationLimit,
+          },
+        });
+      }
+      return bridgeResponse({ connected: false, provisioned: false, shop });
     }
 
     return bridgeResponse({

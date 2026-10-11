@@ -81,6 +81,7 @@ model Business {
   leads Lead[]
   appointments Appointment[]
   shopifyStore ShopifyStore?
+  shopifyMerchantLinks ShopifyMerchantLink[]
   @@map("business")
 }
 
@@ -263,4 +264,20 @@ model ShopifyVariant {
   @@unique([productId,shopifyVariantId])
   @@index([productId])
   @@map("shopifyvariant")
+}
+
+/**
+ * Store-to-workspace association for separately authenticated embedded apps.
+ * No Shopify tokens are stored here; each app keeps its own session/token vault.
+ */
+model ShopifyMerchantLink {
+  id String @id @default(cuid())
+  shopDomain String
+  appClientId String
+  businessId String
+  createdAt DateTime @default(now())
+  business Business @relation(fields:[businessId],references:[id],onDelete:Cascade)
+  @@unique([shopDomain,appClientId])
+  @@index([businessId])
+  @@map("shopifymerchantlink")
 }
