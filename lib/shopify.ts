@@ -1195,12 +1195,18 @@ export async function getShopifyHostedPricingUrl(businessId: string) {
 
   const token = await refreshShopifyAccessToken(store);
   const billingIds = await getShopifyBillingIds(store.shopDomain, token);
-  const appHandle = await resolveShopifyAppHandle(
-    store.shopDomain,
-    token,
-    billingIds.appId,
-    billingIds.appName,
-  );
+  // The app's canonical Shopify handle is configured by the merchant app owner.
+  // A renamed/development app may not be discoverable through appByHandle.
+  // Prefer the explicitly configured handle rather than blocking pricing.
+  const configuredHandle = process.env.SHOPIFY_APP_HANDLE?.trim();
+  const appHandle = configuredHandle && /^[a-z0-9][a-z0-9-]*$/.test(configuredHandle)
+    ? configuredHandle
+    : await resolveShopifyAppHandle(
+        store.shopDomain,
+        token,
+        billingIds.appId,
+        billingIds.appName,
+      );
   const url = shopifyPricingPageUrl(store.shopDomain, appHandle);
   if (!url) throw new Error("Unable to create the Shopify App Pricing URL.");
 
