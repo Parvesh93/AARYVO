@@ -34,20 +34,24 @@ export async function POST(request: Request) {
  if (!link || link.business.billingChannel !== "SHOPIFY") return NextResponse.json({ok:false,error:"Workspace not provisioned"},{status:409});
  const store = await prisma.shopifyStore.findUnique({where:{shopDomain:shop},select:{businessId:true,status:true}});
  if (!store || store.businessId !== link.businessId || store.status !== "CONNECTED") return NextResponse.json({ok:false,error:"Connect Shopify store first"},{status:409});
+ let pricingUrl: string | null = null;
+ let pricingIssue: "APP_HANDLE_REQUIRED" | "PRICING_LOOKUP_FAILED" | null = null;
+ try {
+  pricingUrl = (await getShopifyHostedPricingUrl(link.businessId)).url;
+ } catch(e) {
+  console.warn("Unable to resolve Shopify hosted pricing page",e instanceof Error ? e.message : "Unknown");
+  pricingIssue = process.env.SHOPIFY_APP_HANDLE?.trim() ? "PRICING_LOOKUP_FAILED" : "APP_HANDLE_REQUIRED";
+ }
  try {
   const state = action === "refresh" ? await syncShopifyPricingState(link.businessId) : await inspectShopifyPricingState(link.businessId);
-  if (!state.managed) return NextResponse.json({ok:false,error:"Shopify App Pricing not available for this workspace"},{status:409});
-  let pricingUrl: string | null = null;
-  let pricingIssue: "APP_HANDLE_REQUIRED" | "PRICING_LOOKUP_FAILED" | null = null;
-  try {pricingUrl = (await getShopifyHostedPricingUrl(link.businessId)).url;} catch(e) {
-   console.warn("Unable to resolve Shopify hosted pricing page",e instanceof Error ? e.message : "Unknown");
-   pricingIssue = process.env.SHOPIFY_APP_HANDLE?.trim() ? "PRICING_LOOKUP_FAILED" : "APP_HANDLE_REQUIRED";
-  }
+  if (!state.managed) return NextResponse.json({ok:false,error:"Shopify App Pricing not available for this workspace",shop,pricingUrl,pricingIssue},{status:409});
   return NextResponse.json({ok:true,shop,active:state.active === true,
-   plan: "handle" in state ? state.handle : null,pricingUrl,pricingIssue,
+   plan:"handle" in state ? state.handle : null,pricingUrl,pricingIssue,
    cancelAtEnd:state.cancelAtEnd === true},{headers:{"Cache-Control":"no-store"}});
  } catch(e) {
   console.error("AARYVO Shopify billing verification failed",e instanceof Error ? e.message : "Unknown");
-  return NextResponse.json({ok:false,error:"Shopify billing verification unavailable. Check backend configuration."},{status:503});
+  return NextResponse.json({ok:true,shop,active:null,plan:null,pricingUrl,pricingIssue,
+   verificationAvailable:false,verificationMessage:"Subscription verification is temporarily unavailable. You can select a plan in Shopify, but paid features remain locked until verification succeeds."},
+   {headers:{"Cache-Control":"no-store"}});
  }
 }
