@@ -6,7 +6,7 @@ import { encryptToken } from "@/lib/token-crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const PATH = "/api/internal/shopify-bridge/connect";
-const validShop = (s: string) => /^[a-z0-9][a-z0-9-]*\\.myshopify\\.com$/.test(s);
+const validShop = (s: string) => /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(s);
 
 export async function POST(request: Request) {
   if (!(request.headers.get("content-type") || "").startsWith("application/json")) return NextResponse.json({error:"Invalid content type"}, {status:415});
@@ -22,10 +22,10 @@ export async function POST(request: Request) {
   const nonce = request.headers.get("x-aaryvo-bridge-nonce") || "";
   const signature = request.headers.get("x-aaryvo-bridge-signature") || "";
   if (!validShop(shop) || !/^[a-f0-9]{32}$/i.test(appClientId) || !token || token.length > 2048 || scope.length > 2048 ||
-      secret.length < 32 || !allowed.includes(appClientId) || !/^\\d{13}$/.test(timestamp) ||
+      secret.length < 32 || !allowed.includes(appClientId) || !/^\d{13}$/.test(timestamp) ||
       !/^[0-9a-f-]{36}$/i.test(nonce) || !/^[0-9a-f]{64}$/i.test(signature) ||
       Math.abs(Date.now() - Number(timestamp)) > 120000) return NextResponse.json({error:"Unauthorized"}, {status:401});
-  const canonical = [timestamp,nonce,shop,appClientId,"POST",PATH].join("\\n");
+  const canonical = [timestamp,nonce,shop,appClientId,"POST",PATH].join("\n");
   const expected = crypto.createHmac("sha256",secret).update(canonical).digest();
   const supplied = Buffer.from(signature,"hex");
   if (supplied.length !== expected.length || !crypto.timingSafeEqual(supplied,expected)) return NextResponse.json({error:"Unauthorized"}, {status:401});
