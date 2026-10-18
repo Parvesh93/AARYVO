@@ -38,11 +38,13 @@ export async function POST(request: Request) {
   const state = action === "refresh" ? await syncShopifyPricingState(link.businessId) : await inspectShopifyPricingState(link.businessId);
   if (!state.managed) return NextResponse.json({ok:false,error:"Shopify App Pricing not available for this workspace"},{status:409});
   let pricingUrl: string | null = null;
+  let pricingIssue: "APP_HANDLE_REQUIRED" | "PRICING_LOOKUP_FAILED" | null = null;
   try {pricingUrl = (await getShopifyHostedPricingUrl(link.businessId)).url;} catch(e) {
    console.warn("Unable to resolve Shopify hosted pricing page",e instanceof Error ? e.message : "Unknown");
+   pricingIssue = process.env.SHOPIFY_APP_HANDLE?.trim() ? "PRICING_LOOKUP_FAILED" : "APP_HANDLE_REQUIRED";
   }
   return NextResponse.json({ok:true,shop,active:state.active === true,
-   plan: "handle" in state ? state.handle : null,pricingUrl,
+   plan: "handle" in state ? state.handle : null,pricingUrl,pricingIssue,
    cancelAtEnd:state.cancelAtEnd === true},{headers:{"Cache-Control":"no-store"}});
  } catch(e) {
   console.error("AARYVO Shopify billing verification failed",e instanceof Error ? e.message : "Unknown");
