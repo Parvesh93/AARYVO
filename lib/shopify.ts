@@ -1193,6 +1193,15 @@ export async function getShopifyHostedPricingUrl(businessId: string) {
   const store = await prisma.shopifyStore.findUnique({ where: { businessId } });
   if (!store) throw new Error("Connect a Shopify store before opening Shopify App Pricing.");
 
+  // The pricing URL only requires the verified shop domain and the configured app handle.
+  // Do not block merchant checkout on token refresh or Admin GraphQL availability.
+  const configuredHandle = process.env.SHOPIFY_APP_HANDLE?.trim();
+  if (configuredHandle && /^[a-z0-9][a-z0-9-]*$/.test(configuredHandle)) {
+    const url = shopifyPricingPageUrl(store.shopDomain, configuredHandle);
+    if (!url) throw new Error("Unable to create the Shopify App Pricing URL.");
+    return { url, appHandle: configuredHandle, appId: null, shopDomain: store.shopDomain };
+  }
+
   const token = await refreshShopifyAccessToken(store);
   const billingIds = await getShopifyBillingIds(store.shopDomain, token);
   // The app's canonical Shopify handle is configured by the merchant app owner.
