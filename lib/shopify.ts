@@ -1270,13 +1270,24 @@ async function fetchShopifyPricingSubscription(appId: string, shopId: string) {
     data?: { activeSubscription?: ShopifyPricingSubscription | null };
     errors?: Array<{ message?: string }>;
   };
-  if (!response.ok || payload.errors?.length) {
-    throw new Error(payload.errors?.[0]?.message || "Unable to verify Shopify App Pricing subscription.");
+  if (!response.ok || payload.errors) {
+    const errors = Array.isArray(payload.errors)
+      ? payload.errors.map((entry) => entry.message).filter(Boolean).join("; ")
+      : payload.errors ? JSON.stringify(payload.errors).slice(0, 600) : "";
+    throw new Error(
+      `Shopify Partner subscription lookup failed (HTTP ${response.status}): ${errors || "Unknown API error"}`,
+    );
   }
-  return payload.data?.activeSubscription || null;
+  if (!payload.data || !Object.prototype.hasOwnProperty.call(payload.data, "activeSubscription")) {
+    throw new Error("Shopify Partner API returned no subscription result.");
+  }
+  return payload.data.activeSubscription || null;
 }
 
-async function readShopifyPricingState(businessId: string) {
+async function readShopifyPricingState(
+  businessId: string,
+  verifiedShopifyIdentity?: { shopId: string; appId: string },
+) {
   const business = await prisma.business.findUnique({
     where: { id: businessId },
     select: {
@@ -1294,12 +1305,24 @@ async function readShopifyPricingState(businessId: string) {
   }
 
   const store = business.shopifyStore;
-  const token = await refreshShopifyAccessToken(store);
-  const billingIds = await getShopifyBillingIds(store.shopDomain, token);
+  // The embedded Shopify app supplies identity obtained from its authenticated
+  // Admin API session. App Pricing itself is verified with the Partner API:
+  // its appId must be gid://shopify/App/... (NOT gid://partners/App/...).
+  // Avoid reading the backend's potentially expired cached Admin API token.
+  const billingIds = verifiedShopifyIdentity ?? await (async () => {
+    const token = await refreshShopifyAccessToken(store);
+    return getShopifyBillingIds(store.shopDomain, token);
+  })();
   const subscription = await fetchShopifyPricingSubscription(
-    process.env.SHOPIFY_PARTNER_APP_ID!.trim(),
+    billingIds.appId,
     billingIds.shopId,
   );
+  if (subscription && (
+    subscription.shop?.id !== billingIds.shopId ||
+    subscription.shop?.myshopifyDomain?.toLowerCase() !== store.shopDomain
+  )) {
+    throw new Error("Shopify Partner API returned a subscription for a different store.");
+  }
 
   return {
     managed: true as const,
@@ -1506,8 +1529,11 @@ export async function cancelShopifyPricingSubscription(params: {
   };
 }
 
-export async function inspectShopifyPricingState(businessId: string) {
-  const state = await readShopifyPricingState(businessId);
+export async function inspectShopifyPricingState(
+  businessId: string,
+  verifiedShopifyIdentity?: { shopId: string; appId: string },
+) {
+  const state = await readShopifyPricingState(businessId, verifiedShopifyIdentity);
 
   if (!state.managed) {
     return {
@@ -1537,8 +1563,11 @@ export async function inspectShopifyPricingState(businessId: string) {
   };
 }
 
-export async function syncShopifyPricingState(businessId: string) {
-  const state = await readShopifyPricingState(businessId);
+export async function syncShopifyPricingState(
+  businessId: string,
+  verifiedShopifyIdentity?: { shopId: string; appId: string },
+) {
+  const state = await readShopifyPricingState(businessId, verifiedShopifyIdentity);
 
   if (!state.managed) {
     return {
