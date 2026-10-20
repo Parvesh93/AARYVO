@@ -32,12 +32,13 @@ export async function POST(request: Request) {
   const link = await prisma.shopifyMerchantLink.findUnique({where:{shopDomain_appClientId:{shopDomain:shop,appClientId}},select:{businessId:true}});
   if (!link) return NextResponse.json({error:"Workspace not provisioned"}, {status:409});
   const existing = await prisma.shopifyStore.findUnique({where:{shopDomain:shop},select:{id:true,businessId:true,status:true}});
-  // Never replace a pre-existing production OAuth token or reassign another workspace.
-  if (existing) return NextResponse.json(existing.businessId === link.businessId
-    ? {ok:true,shop,connected:existing.status === "CONNECTED",existing:true}
-    : {error:"Store already linked to another workspace"}, {status:existing.businessId === link.businessId ? 200 : 409});
+  // Existing connections are refreshed only after validating the replacement token.
+  // Never move a connection between workspaces.
+  if (existing && existing.businessId !== link.businessId) {
+    return NextResponse.json({error:"Store already linked to another workspace"}, {status:409});
+  }
   const other = await prisma.shopifyStore.findUnique({where:{businessId:link.businessId},select:{id:true}});
-  if (other) return NextResponse.json({error:"Workspace already has a Shopify connection"}, {status:409});
+  if (other && !existing) return NextResponse.json({error:"Workspace already has a Shopify connection"}, {status:409});
   // Verify the token with Shopify before persisting. Never accept an arbitrary token for a signed shop name.
   const verification = await fetch(`https://${shop}/admin/api/2026-10/graphql.json`,{
     method:"POST",headers:{"Content-Type":"application/json","X-Shopify-Access-Token":token},
@@ -47,9 +48,13 @@ export async function POST(request: Request) {
   const result = await verification.json().catch(()=>null);
   if (result?.data?.shop?.myshopifyDomain?.toLowerCase() !== shop) return NextResponse.json({error:"Token belongs to a different store"}, {status:403});
   try {
-    await prisma.shopifyStore.create({data:{businessId:link.businessId,shopDomain:shop,accessTokenEncrypted:encryptToken(token),scope,status:"CONNECTED"}});
+    if (existing) {
+      await prisma.shopifyStore.update({where:{id:existing.id},data:{accessTokenEncrypted:encryptToken(token),scope,status:"CONNECTED",accessTokenExpiresAt:null,refreshTokenEncrypted:null}});
+    } else {
+      await prisma.shopifyStore.create({data:{businessId:link.businessId,shopDomain:shop,accessTokenEncrypted:encryptToken(token),scope,status:"CONNECTED"}});
+    }
   } catch {
     return NextResponse.json({error:"Connection already exists or could not be saved"}, {status:409});
   }
-  return NextResponse.json({ok:true,shop,connected:true,created:true});
+  return NextResponse.json({ok:true,shop,connected:true,created:!existing,refreshed:Boolean(existing)});
 }
