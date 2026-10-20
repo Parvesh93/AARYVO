@@ -61,7 +61,13 @@ export async function GET(request: Request) {
     }
 
     const agentId = store.business.agents[0].id;
-    const widgetUrl = new URL("/api/widget-script", request.url).toString();
+    // Use the configured public HTTPS origin, never a reverse-proxy/internal
+    // Host header, so Shopify storefronts do not receive mixed-content URLs.
+    const publicOrigin = process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://aaryvo.ppdesigntech.com";
+    const widgetUrl = new URL("/api/widget-script", publicOrigin);
+    if (widgetUrl.protocol !== "https:") {
+      throw new Error("Public AARYVO app URL must use HTTPS.");
+    }
 
     // Both values originate from the database or this server URL and are
     // JSON-encoded, so they cannot inject code into the JavaScript response.
@@ -69,7 +75,7 @@ export async function GET(request: Request) {
       if (document.querySelector("[data-aaryvo-root]") || window.__aaryvoShopifyLoaded) return;
       window.__aaryvoShopifyLoaded = true;
       const widget = document.createElement("script");
-      widget.src = ${JSON.stringify(widgetUrl)};
+      widget.src = ${JSON.stringify(widgetUrl.toString())};
       widget.dataset.agent = ${JSON.stringify(agentId)};
       widget.defer = true;
       widget.onerror = () => { window.__aaryvoShopifyLoaded = false; };
