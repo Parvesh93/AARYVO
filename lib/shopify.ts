@@ -1270,7 +1270,7 @@ async function fetchShopifyPricingSubscription(appId: string, shopId: string) {
     data?: { activeSubscription?: ShopifyPricingSubscription | null };
     errors?: Array<{ message?: string }>;
   };
-  if (!response.ok || payload.errors) {
+  if (!response.ok || (Array.isArray(payload.errors) ? payload.errors.length > 0 : Boolean(payload.errors))) {
     const errors = Array.isArray(payload.errors)
       ? payload.errors.map((entry) => entry.message).filter(Boolean).join("; ")
       : payload.errors ? JSON.stringify(payload.errors).slice(0, 600) : "";
