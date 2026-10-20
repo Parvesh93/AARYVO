@@ -1167,7 +1167,7 @@ async function getShopifyBillingIds(shopDomain: string, token: string) {
     body: JSON.stringify({
       query: `query AaryvoBillingIds {
         shop { id }
-        app { id apiKey title }
+        currentAppInstallation { app { id title } }
       }`,
     }),
     cache: "no-store",
@@ -1175,12 +1175,12 @@ async function getShopifyBillingIds(shopDomain: string, token: string) {
   const payload = (await response.json()) as {
     data?: {
       shop?: { id?: string };
-      app?: { id?: string; apiKey?: string; title?: string };
+      currentAppInstallation?: { app?: { id?: string; title?: string } | null } | null;
     };
     errors?: Array<{ message?: string }>;
   };
   const shopId = payload.data?.shop?.id;
-  const appId = payload.data?.app?.id;
+  const appId = payload.data?.currentAppInstallation?.app?.id;
   if (!response.ok || !shopId || !appId) {
     throw new Error(
       payload.errors?.[0]?.message ||
@@ -1190,8 +1190,8 @@ async function getShopifyBillingIds(shopDomain: string, token: string) {
   return {
     shopId,
     appId,
-    appName: payload.data?.app?.title || "AARYVO",
-    apiKey: payload.data?.app?.apiKey || "",
+    appName: payload.data?.currentAppInstallation?.app?.title || "AARYVO",
+    apiKey: "",
   };
 }
 
