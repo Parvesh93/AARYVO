@@ -418,17 +418,23 @@ async function refreshShopifyAccessToken(store: {
   refreshTokenEncrypted: string | null;
   accessTokenExpiresAt: Date | null;
 }) {
-  const now = Date.now();
-  const needsRefresh =
-    !store.accessTokenExpiresAt ||
-    store.accessTokenExpiresAt.getTime() <= now + 5 * 60 * 1000;
-
-  if (!needsRefresh) return decryptToken(store.accessTokenEncrypted);
-
   const currentAccessToken = decryptToken(store.accessTokenEncrypted);
+  // Legacy Shopify offline access tokens are non-expiring. A null expiry is
+  // not a signal to exchange them: Shopify rejects offline tokens used as
+  // subject tokens in this OAuth flow (invalid_subject_token).
+  if (!store.accessTokenExpiresAt) return currentAccessToken;
+
+  const now = Date.now();
+  if (store.accessTokenExpiresAt.getTime() > now + 5 * 60 * 1000) {
+    return currentAccessToken;
+  }
+
   const refreshToken = store.refreshTokenEncrypted
     ? decryptToken(store.refreshTokenEncrypted)
     : null;
+  if (!refreshToken) {
+    throw new Error("Shopify access token expired without a refresh token. Reauthorize the Shopify connection.");
+  }
 
   const form = refreshToken
     ? new URLSearchParams({
