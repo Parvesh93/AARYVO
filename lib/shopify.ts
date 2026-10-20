@@ -1172,19 +1172,25 @@ async function getShopifyBillingIds(shopDomain: string, token: string) {
     }),
     cache: "no-store",
   });
-  const payload = (await response.json()) as {
+  const raw = await response.text();
+  let payload: {
     data?: {
       shop?: { id?: string };
       currentAppInstallation?: { app?: { id?: string; title?: string } | null } | null;
     };
     errors?: Array<{ message?: string }>;
-  };
+  } = {};
+  try {
+    payload = JSON.parse(raw);
+  } catch {
+    throw new Error(`Shopify Admin API returned non-JSON response (HTTP ${response.status}).`);
+  }
   const shopId = payload.data?.shop?.id;
   const appId = payload.data?.currentAppInstallation?.app?.id;
-  if (!response.ok || !shopId || !appId) {
+  if (!response.ok || !shopId || !appId || payload.errors?.length) {
+    const errors = payload.errors?.map((item) => item.message).filter(Boolean).join("; ");
     throw new Error(
-      payload.errors?.[0]?.message ||
-        "Unable to identify the connected Shopify store and app.",
+      `Shopify Admin billing identity failed (HTTP ${response.status}; shopId=${shopId ? "present" : "missing"}; appId=${appId ? "present" : "missing"}): ${errors || "Shopify returned incomplete billing identity data"}`,
     );
   }
   return {
