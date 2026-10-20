@@ -31,6 +31,7 @@ const allowedOrigins = Array.from(
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   experimental: {
+    cpus: 2,
     serverActions: {
       allowedOrigins,
     },
