@@ -1188,7 +1188,9 @@ async function getShopifyBillingIds(shopDomain: string, token: string) {
   const shopId = payload.data?.shop?.id;
   const appId = payload.data?.currentAppInstallation?.app?.id;
   if (!response.ok || !shopId || !appId || payload.errors?.length) {
-    const errors = payload.errors?.map((item) => item.message).filter(Boolean).join("; ");
+    const errors = Array.isArray(payload.errors)
+      ? payload.errors.map((item) => item.message).filter(Boolean).join("; ")
+      : payload.errors ? JSON.stringify(payload.errors).slice(0, 800) : "";
     throw new Error(
       `Shopify Admin billing identity failed (HTTP ${response.status}; shopId=${shopId ? "present" : "missing"}; appId=${appId ? "present" : "missing"}): ${errors || "Shopify returned incomplete billing identity data"}`,
     );
@@ -1295,7 +1297,7 @@ async function readShopifyPricingState(businessId: string) {
   const token = await refreshShopifyAccessToken(store);
   const billingIds = await getShopifyBillingIds(store.shopDomain, token);
   const subscription = await fetchShopifyPricingSubscription(
-    billingIds.appId,
+    process.env.SHOPIFY_PARTNER_APP_ID!.trim(),
     billingIds.shopId,
   );
 
