@@ -16,16 +16,22 @@ export async function POST(request: Request) {
  const body = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string,unknown> : {};
  const shop = typeof body.shop === "string" ? body.shop.trim().toLowerCase() : "";
  const appClientId = typeof body.appClientId === "string" ? body.appClientId : "";
+ // IDs must come from authenticate.admin() on the connected Shopify app.
+ const shopId = typeof body.shopId === "string" ? body.shopId : "";
+ const appId = typeof body.appId === "string" ? body.appId : "";
  const secret = process.env.AARYVO_BRIDGE_SECRET?.trim() || "";
  const allowed = (process.env.AARYVO_BRIDGE_ALLOWED_CLIENT_IDS || "").split(",").map(x=>x.trim());
  const timestamp = request.headers.get("x-aaryvo-bridge-timestamp") || "";
  const nonce = request.headers.get("x-aaryvo-bridge-nonce") || "";
  const signature = request.headers.get("x-aaryvo-bridge-signature") || "";
- if (!validShop(shop) || !/^[a-f0-9]{32}$/i.test(appClientId) || secret.length < 32 ||
+ if (!validShop(shop) || !/^[a-f0-9]{32}$/i.test(appClientId) ||
+     !/^gid:\/\/shopify\/Shop\/[0-9]+$/.test(shopId) ||
+     !/^gid:\/\/shopify\/App\/[0-9]+$/.test(appId) || secret.length < 32 ||
      !allowed.includes(appClientId) || !/^\d{13}$/.test(timestamp) ||
      !/^[0-9a-f-]{36}$/i.test(nonce) || !/^[0-9a-f]{64}$/i.test(signature) ||
      Math.abs(Date.now() - Number(timestamp)) > 120000) return NextResponse.json({ok:false,error:"Unauthorized"}, {status:401});
- const canonical = [timestamp,nonce,shop,appClientId,"POST",PATH].join("\n");
+ // Bind both Shopify IDs into the signed request, not just the shop domain.
+ const canonical = [timestamp,nonce,shop,appClientId,shopId,appId,"POST",PATH].join("\n");
  const expected = crypto.createHmac("sha256",secret).update(canonical).digest();
  const actual = Buffer.from(signature,"hex");
  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual,expected)) return NextResponse.json({ok:false,error:"Unauthorized"}, {status:401});
@@ -43,7 +49,10 @@ export async function POST(request: Request) {
   pricingIssue = process.env.SHOPIFY_APP_HANDLE?.trim() ? "PRICING_LOOKUP_FAILED" : "APP_HANDLE_REQUIRED";
  }
  try {
-  const state = action === "refresh" ? await syncShopifyPricingState(link.businessId) : await inspectShopifyPricingState(link.businessId);
+  const identity = { shopId, appId };
+  const state = action === "refresh"
+   ? await syncShopifyPricingState(link.businessId, identity)
+   : await inspectShopifyPricingState(link.businessId, identity);
   if (!state.managed) return NextResponse.json({ok:false,error:"Shopify App Pricing not available for this workspace",shop,pricingUrl,pricingIssue},{status:409});
   return NextResponse.json({ok:true,shop,active:state.active === true,
    plan:"handle" in state ? state.handle : null,pricingUrl,pricingIssue,
