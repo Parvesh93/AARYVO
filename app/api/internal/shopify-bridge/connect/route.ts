@@ -16,12 +16,19 @@ export async function POST(request: Request) {
   const appClientId = typeof body.appClientId === "string" ? body.appClientId : "";
   const token = typeof body.accessToken === "string" ? body.accessToken : "";
   const scope = typeof body.scope === "string" ? body.scope : "";
+  const refreshToken = typeof body.refreshToken === "string" ? body.refreshToken : "";
+  const tokenExpiresRaw = typeof body.accessTokenExpiresAt === "string" ? body.accessTokenExpiresAt : "";
+  const refreshExpiresRaw = typeof body.refreshTokenExpiresAt === "string" ? body.refreshTokenExpiresAt : "";
+  const tokenExpiry = tokenExpiresRaw ? new Date(tokenExpiresRaw) : null;
+  const refreshExpiry = refreshExpiresRaw ? new Date(refreshExpiresRaw) : null;
   const secret = process.env.AARYVO_BRIDGE_SECRET || "";
   const allowed = (process.env.AARYVO_BRIDGE_ALLOWED_CLIENT_IDS || "").split(",").map(x=>x.trim());
   const timestamp = request.headers.get("x-aaryvo-bridge-timestamp") || "";
   const nonce = request.headers.get("x-aaryvo-bridge-nonce") || "";
   const signature = request.headers.get("x-aaryvo-bridge-signature") || "";
-  if (!validShop(shop) || !/^[a-f0-9]{32}$/i.test(appClientId) || !token || token.length > 2048 || scope.length > 2048 ||
+  if (!validShop(shop) || !/^[a-f0-9]{32}$/i.test(appClientId) || !token || token.length > 2048 || refreshToken.length > 2048 || scope.length > 2048 ||
+      (tokenExpiresRaw && (!tokenExpiry || !Number.isFinite(tokenExpiry.getTime()) || tokenExpiry.getTime() <= Date.now())) ||
+      (refreshExpiresRaw && (!refreshExpiry || !Number.isFinite(refreshExpiry.getTime()))) ||
       secret.length < 32 || !allowed.includes(appClientId) || !/^\d{13}$/.test(timestamp) ||
       !/^[0-9a-f-]{36}$/i.test(nonce) || !/^[0-9a-f]{64}$/i.test(signature) ||
       Math.abs(Date.now() - Number(timestamp)) > 120000) return NextResponse.json({error:"Unauthorized"}, {status:401});
@@ -48,10 +55,18 @@ export async function POST(request: Request) {
   const result = await verification.json().catch(()=>null);
   if (result?.data?.shop?.myshopifyDomain?.toLowerCase() !== shop) return NextResponse.json({error:"Token belongs to a different store"}, {status:403});
   try {
+    const tokenData = {
+      accessTokenEncrypted: encryptToken(token),
+      scope,
+      status: "CONNECTED",
+      accessTokenExpiresAt: tokenExpiry,
+      refreshTokenEncrypted: refreshToken ? encryptToken(refreshToken) : null,
+      refreshTokenExpiresAt: refreshExpiry,
+    };
     if (existing) {
-      await prisma.shopifyStore.update({where:{id:existing.id},data:{accessTokenEncrypted:encryptToken(token),scope,status:"CONNECTED",accessTokenExpiresAt:null,refreshTokenEncrypted:null}});
+      await prisma.shopifyStore.update({where:{id:existing.id},data:tokenData});
     } else {
-      await prisma.shopifyStore.create({data:{businessId:link.businessId,shopDomain:shop,accessTokenEncrypted:encryptToken(token),scope,status:"CONNECTED"}});
+      await prisma.shopifyStore.create({data:{businessId:link.businessId,shopDomain:shop,...tokenData}});
     }
   } catch {
     return NextResponse.json({error:"Connection already exists or could not be saved"}, {status:409});
