@@ -202,7 +202,7 @@ export async function POST(request: Request) {
       if (operation === "read") {
         const obj: JsonRecord = {};
         for (const [database, client] of Object.entries(fields)) {
-          const val = agent[database as keyof typeof fields extends never ? never : keyof typeof agent];
+          const val = agent[database as keyof typeof agent];
           obj[client] = val ?? (typeof val === "boolean" ? false : "");
         }
         return response({ ok: true, shop, resource, data: {
@@ -231,11 +231,11 @@ export async function POST(request: Request) {
         });
         const advanced = ["launcherLabel", "launcherAnimation", "launcherLabelEnabled"];
         const branding = ["title", "subtitle", "welcomeMessage", "accentColor", "theme", "position", "launcherStyle", "showPoweredBy"];
-        if (!feature("advancedWidgetControls") && advanced.some(k => k in inputs)) return requires("advancedWidgetControls");
-        if (!feature("customWidgetBranding") && branding.some(k => k in inputs)) return requires("customWidgetBranding");
+        if (!feature("advancedWidgetControls") && advanced.some(k => k in inputs)) return response({ ok: false, message: "Growth plan required for launcher controls." }, 403);
+        if (!feature("customWidgetBranding") && branding.some(k => k in inputs)) return response({ ok: false, message: "Growth plan required for widget branding." }, 403);
         if (!feature("whatsappHandoff") &&
           ["whatsappEnabled", "whatsappNumber", "whatsappLabel", "whatsappMessage"].some(k => k in inputs)) {
-          return requires("whatsappHandoff");
+          return response({ ok: false, message: "Starter plan required for WhatsApp handoff." }, 403);
         }
         const update: JsonRecord = {};
         for (const [database, client] of Object.entries(fields)) {
@@ -316,8 +316,8 @@ export async function POST(request: Request) {
           followUpStatus: enumField(["PENDING", "CONTACTED", "COMPLETED", "NOT_REQUIRED"]),
           followUpNote: v => textField(v, 4000),
         });
-        if ("status" in values && !feature("leadScoring")) return requires("leadScoring");
-        if (("followUpStatus" in values || "followUpNote" in values) && !feature("followUpWorkflow")) return requires("followUpWorkflow");
+        if ("status" in values && !feature("leadScoring")) return response({ ok: false, message: "Starter plan required for lead scoring." }, 403);
+        if (("followUpStatus" in values || "followUpNote" in values) && !feature("followUpWorkflow")) return response({ ok: false, message: "Growth plan required for follow-up workflow." }, 403);
         const result = await prisma.lead.updateMany({ where: { id, businessId }, data: values });
         if (!result.count) return response({ ok: false, message: "Lead not found." }, 404);
         return response({ ok: true, shop, resource, message: "Lead updated." });
@@ -435,7 +435,7 @@ export async function POST(request: Request) {
       if (operation === "save") {
         const values = allowUpdate(data, {
           notificationEmail: v => typeof v === "string" && (v === "" ||
-            (v.length <= 180 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))) ? (v || null) : null,
+            (v.length <= 180 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v))) ? v : null,
           notifyNewLead: bool, notifyHotLead: bool, notifyAppointment: bool, notifyHumanAttention: bool,
           bookingTimeZone: v => safeString(v, 90) && (() => {
             try { new Intl.DateTimeFormat("en", { timeZone: String(v) }); return String(v); }
