@@ -36,6 +36,23 @@ async function ensureTable() {
   return tableReady;
 }
 
+
+// Minimize linkable engagement history. Prune on storefront activity and
+// merchant reporting (no external cron dependency for active storefronts).
+let lastPrunedAt = 0;
+let pruning: Promise<void> | null = null;
+async function pruneExpiredEngagement() {
+  if (Date.now() - lastPrunedAt < 24 * 60 * 60 * 1000) return;
+  if (pruning) return pruning;
+  pruning = prisma.$executeRawUnsafe(
+    "DELETE FROM shopify_funnel_event WHERE createdAt < DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 90 DAY)",
+  ).then(() => { lastPrunedAt = Date.now(); }).catch(error => {
+    console.error("AARYVO funnel engagement retention cleanup failed",
+      error instanceof Error ? error.message : "unknown");
+  }).finally(() => { pruning = null; });
+  return pruning;
+}
+
 export async function recordShopifyFunnelEvent(input: {
   businessId: string;
   agentId: string;
@@ -45,6 +62,7 @@ export async function recordShopifyFunnelEvent(input: {
   signedToken: string;
 }) {
   await ensureTable();
+  await pruneExpiredEngagement();
   const digest = crypto.createHash("sha256").update(input.signedToken).digest("hex");
   // Deduplicate re-rendered recommendations, double clicks, and repeat cart
   // checks. Do not persist the signed token or shopper identity.
@@ -68,6 +86,7 @@ function boundedRate(numerator: number, denominator: number) {
 
 export async function readShopifyFunnelSummary(businessId: string, storeId: string) {
   await ensureTable();
+  await pruneExpiredEngagement();
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
   since.setUTCDate(since.getUTCDate() - 29);
