@@ -900,7 +900,7 @@ export async function POST(request: Request) {
 
         // Broad gifting/discovery should not collapse into one category just
         // because that category happens to contain the strongest keyword hit.
-        if (commerceState.broad && !commerceState.intent.category) {
+        if (commerceState.broad && !commerceState.intent.category && !commerceState.intent.occasion) {
           shopifyProducts = await broadenAvailableSelection({
             businessId: agent.businessId,
             agentId: agent.id,
@@ -922,6 +922,7 @@ export async function POST(request: Request) {
 
           const strictCategoryRequest =
             Boolean(commerceState.intent.category) ||
+            Boolean(commerceState.intent.occasion) ||
             (commerceState.specificProductIntent && !commerceState.broad);
 
           if (inStockMatches.length < desiredCount && !strictCategoryRequest) {
@@ -972,11 +973,12 @@ export async function POST(request: Request) {
             commerceReply =
               "The closest exact matches are currently sold out, so I don’t want to recommend something you can’t buy. Tell me the nearest category you’d consider and I’ll show only available options.";
           }
-        } else if (commerceState.specificProductIntent) {
+        } else if (commerceState.specificProductIntent || commerceState.intent.occasion) {
           // Exact category searches should fail honestly. Do not revive a
           // previous category or silently substitute unrelated stock when a
           // customer requests gowns, floral dresses, rings, etc.
-          const category = commerceState.intent.category || "products matching that request";
+          const category = commerceState.intent.category ||
+            (commerceState.intent.occasion ? `outfits suitable for ${commerceState.intent.occasion}` : "products matching that request");
           const budget = commerceState.intent.budgetMax;
           const symbol = shopifyOverview?.currencyCode === "INR" ? "₹" :
             shopifyOverview?.currencyCode === "USD" ? "$" :
