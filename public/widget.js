@@ -3,7 +3,7 @@ const script=document.currentScript;if(!script||script.dataset.aaryvoLoaded==="t
 function attachShopifyCheckoutRef(){
   if(!window.Shopify||!location.pathname.includes("/products/"))return;
   const urlRef=new URLSearchParams(location.hash.slice(1)).get("aaryvo_ref");
-  const valid=v=>typeof v==="string"&&v.length<900&&/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$/.test(v);
+  const valid=v=>typeof v==="string"&&v.length<900&&/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(v);
   let ref=valid(urlRef)?urlRef:null;
   const key="aaryvo:product-ref";
   if(ref){
