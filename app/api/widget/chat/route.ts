@@ -972,6 +972,19 @@ export async function POST(request: Request) {
             commerceReply =
               "The closest exact matches are currently sold out, so I don’t want to recommend something you can’t buy. Tell me the nearest category you’d consider and I’ll show only available options.";
           }
+        } else if (commerceState.specificProductIntent) {
+          // Exact category searches should fail honestly. Do not revive a
+          // previous category or silently substitute unrelated stock when a
+          // customer requests gowns, floral dresses, rings, etc.
+          const category = commerceState.intent.category || "products matching that request";
+          const budget = commerceState.intent.budgetMax;
+          const symbol = shopifyOverview?.currencyCode === "INR" ? "₹" :
+            shopifyOverview?.currencyCode === "USD" ? "$" :
+            shopifyOverview?.currencyCode === "GBP" ? "£" :
+            shopifyOverview?.currencyCode === "EUR" ? "€" : "";
+          commerceReply = `I couldn't find any available ${category}${budget !== null
+            ? ` within ${symbol}${budget.toLocaleString()}` : ""} that match your request in this store. Would you like to try a different style or budget?`;
+          commerceUi = null;
         } else {
           const mustShowProducts =
             commerceState.flexible || commerceState.clarificationCount >= 3;
