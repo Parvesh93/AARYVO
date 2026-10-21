@@ -91,6 +91,7 @@ test("funnel backend deduplicates signed product-stage events and counts distinc
     $executeRawUnsafe:async(sql,...args)=>{calls.push({sql,args});return 1},
     $queryRawUnsafe:async(sql,...args)=>{
       calls.push({sql,args});
+      if(sql.includes("AND conversationId IN"))return [{total:1n}];
       if(sql.includes("COUNT(DISTINCT conversationId)"))
         return [
           {eventType:"RECOMMENDATION_VIEW",total:8n,sessions:4n},
@@ -136,4 +137,10 @@ test("funnel backend deduplicates signed product-stage events and counts distinc
   assert.equal(result.topProducts[0].title,"Scarlett Frill");
   const selectCalls=calls.filter(call=>call.sql.startsWith("SELECT"));
   assert.ok(selectCalls.every(call=>call.args[0]==="business-1"));
+  const purchased=await funnel.countShopifyPaidClickConversions("business-1", [validParams.conversationId]);
+  assert.equal(purchased,1);
+  const matchedQuery=calls.find(call=>call.sql.includes("AND conversationId IN"));
+  assert.deepEqual(matchedQuery.args.slice(0,1),["business-1"]);
+  assert.equal(matchedQuery.args[2],validParams.conversationId);
+  await assert.rejects(()=>funnel.countShopifyPaidClickConversions("business-1",["bad-id"]));
 });
