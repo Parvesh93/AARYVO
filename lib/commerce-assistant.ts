@@ -61,7 +61,7 @@ function normalize(value: string) {
 
 const CATEGORY_TERMS = [
   "ring","rings","earring","earrings","necklace","necklaces","bangle","bangles",
-  "bracelet","bracelets","top","tops","shirt","shirts","dress","dresses","pants",
+  "bracelet","bracelets","top","tops","shirt","shirts","dress","dresses","gown","gowns","pants",
   "trousers","skincare","serum","cleanser","cream","moisturizer","moisturiser",
   "shoe","shoes","bag","bags","jewellery","jewelry",
 ];
@@ -107,9 +107,7 @@ function extractIntent(
   for (let index = userMessages.length - 1; index >= 0 && !category; index--) {
     const message = userMessages[index];
     const normalizedMessage = normalize(message);
-    const matchedType = productTypes.find(
-      (type) => phraseIn(message, type) || phraseIn(type, message),
-    );
+    const matchedType = productTypes.find((type) => phraseIn(message, type));
     category =
       matchedType ||
       CATEGORY_TERMS.find((term) => phraseIn(normalizedMessage, term)) ||
@@ -173,6 +171,9 @@ export function buildCommerceRecommendationQuery(state: CommerceState) {
     ...state.intent.colors,
     ...state.intent.materials,
     ...state.intent.sizes,
+    // Pattern and finish terms must survive the intent-to-search conversion:
+    // "floral dresses" must never become the overly broad "dresses".
+    ...SHOPPING_DESCRIPTORS.filter((term) => phraseIn(state.searchQuery, term)),
   ].filter(Boolean) as string[];
 
   if (state.intent.budgetMax !== null) {
@@ -181,6 +182,27 @@ export function buildCommerceRecommendationQuery(state: CommerceState) {
 
   if (!parts.length) return state.searchQuery;
   return [...new Set(parts)].join(" ");
+}
+
+const SHOPPING_DESCRIPTORS = [
+  "floral", "flower", "flowers", "embroidered", "embroidery", "printed",
+  "striped", "polka", "sequined", "lace", "ruffled", "denim",
+  "maxi", "midi", "mini",
+] as const;
+
+function namesShoppingCategory(message: string, overview: ShopifyCatalogOverview | null) {
+  return CATEGORY_TERMS.some((term) => phraseIn(message, term)) ||
+    Boolean(overview?.productTypes.some((type) => phraseIn(message, type)));
+}
+
+// "Do you have any gowns?" is a new shopping request, not a refinement
+// of the previous "floral dresses under ₹5,000" request.
+function startsNewCommerceRequest(message: string, overview: ShopifyCatalogOverview | null) {
+  if (isFlexibleCommerceAnswer(message)) return false;
+  if (namesShoppingCategory(message, overview)) return true;
+  return /\b(?:show me|do you have|have any|can you (?:show|recommend|suggest)|recommend (?:me |something)|suggest (?:me |something)|find me|i (?:want|need|am looking for)|looking for|what (?:do you have|can you recommend))\b/i.test(message) &&
+    looksLikeCommerceIntent(message, overview) &&
+    !/^\s*(?:show|give|recommend|suggest)\s+(?:me\s+)?\d{1,2}\s*$/i.test(message);
 }
 
 function phraseIn(text: string, phrase: string) {
@@ -234,7 +256,7 @@ export function hasSpecificCommerceProductIntent(
   // language such as gifts/recommendations should be clarified first.
   const broadOnly =
     BROAD_COMMERCE.test(message) &&
-    !/\b(ring|rings|earring|earrings|necklace|necklaces|bangle|bangles|bracelet|bracelets|top|tops|shirt|shirts|dress|dresses|pants|trousers|skincare|serum|cleanser|cream|moisturizer|moisturiser|shoe|shoes|bag|bags)\b/i.test(
+    !/\b(ring|rings|earring|earrings|necklace|necklaces|bangle|bangles|bracelet|bracelets|top|tops|shirt|shirts|dress|dresses|gown|gowns|pants|trousers|skincare|serum|cleanser|cream|moisturizer|moisturiser|shoe|shoes|bag|bags)\b/i.test(
       message,
     );
 
@@ -285,27 +307,26 @@ export function deriveCommerceState(params: {
   const currentFlexible = isFlexibleCommerceAnswer(currentMessage);
   const currentRefinement = isLikelyShopifyRefinement(currentMessage);
   const currentWords = normalize(currentMessage).split(" ").filter(Boolean);
+  const newRequest = startsNewCommerceRequest(currentMessage, overview);
   const continuingCommerce =
     Boolean(params.priorCommerceActive) &&
+    !newRequest &&
     !NON_COMMERCE.test(currentMessage) &&
     !GREETING.test(currentMessage.trim()) &&
     currentWords.length > 0 &&
     currentWords.length <= 10;
 
-  let baseIndex = -1;
-  const searchFrom = continuingCommerce ? messages.length - 2 : messages.length - 1;
+  // Only refinement turns inherit the previous request and its budget. A fresh
+  // category/search request starts from the newest user turn, even inside the
+  // same 30-minute conversation session.
+  const latestUserIndex = messages.reduce(
+    (index, item, position) => item.role === "assistant" ? index : position,
+    -1,
+  );
+  let baseIndex = newRequest ? latestUserIndex : -1;
 
-  for (let index = searchFrom; index >= 0; index--) {
-    const item = messages[index];
-    if (item.role === "assistant") continue;
-    if (isBaseCommerceMessage(item.content, overview)) {
-      baseIndex = index;
-      break;
-    }
-  }
-
-  if (baseIndex < 0 && !continuingCommerce) {
-    for (let index = messages.length - 1; index >= 0; index--) {
+  if (baseIndex < 0) {
+    for (let index = continuingCommerce ? latestUserIndex - 1 : latestUserIndex; index >= 0; index--) {
       const item = messages[index];
       if (item.role === "assistant") continue;
       if (isBaseCommerceMessage(item.content, overview)) {
@@ -365,7 +386,7 @@ export function deriveCommerceState(params: {
       ),
     );
   const searchQuery =
-    currentCategoryMessage ||
+    (newRequest ? currentMessage.trim() : currentCategoryMessage) ||
     currentMessage.trim() ||
     [...new Set(userParts)].join(" ").trim() ||
     baseIntent;
@@ -386,6 +407,11 @@ export function deriveCommerceState(params: {
     .map((item) => item.content);
 
   const intent = extractIntent(intentMessages, overview);
+  // Removing the old budget on "any budget" is intentional. This answer
+  // should loosen, rather than silently retain, a previous price ceiling.
+  if (/\b(any budget|no budget|budget flexible)\b/i.test(currentMessage)) {
+    intent.budgetMax = null;
+  }
 
   return {
     active: true,
