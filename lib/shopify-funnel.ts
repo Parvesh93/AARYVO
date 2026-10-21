@@ -84,12 +84,12 @@ function boundedRate(numerator: number, denominator: number) {
   return Math.round((numerator / denominator) * 1000) / 10;
 }
 
-export async function readShopifyFunnelSummary(businessId: string, storeId: string) {
+export async function readShopifyFunnelSummary(businessId: string, storeId: string, days: 7 | 30 | 90 = 30) {
   await ensureTable();
   await pruneExpiredEngagement();
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
-  since.setUTCDate(since.getUTCDate() - 29);
+  since.setUTCDate(since.getUTCDate() - (days - 1));
 
   type EventRow = {
     eventType: ShopifyFunnelEvent;
@@ -129,7 +129,7 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
       "SUM(CASE WHEN eventType='ADD_TO_CART' THEN 1 ELSE 0 END) AS carts," +
       "SUM(CASE WHEN eventType='RECOMMENDATION_VIEW' THEN 1 ELSE 0 END) AS views " +
       "FROM shopify_funnel_event WHERE businessId=? AND createdAt>=? GROUP BY shopifyProductId " +
-      "ORDER BY clicks DESC,views DESC LIMIT 10",
+      "ORDER BY clicks DESC,views DESC LIMIT 25",
       businessId, since,
     ),
   ]);
@@ -143,7 +143,7 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
   const clicks = byType.PRODUCT_CLICK || empty;
   const carts = byType.ADD_TO_CART || empty;
   const dates = new Map(days.map(d => [d.day, d]));
-  const trend: Trend[] = Array.from({ length: 30 }, (_, index) => {
+  const trend: Trend[] = Array.from({ length: days }, (_, index) => {
     const date = new Date(since.getTime() + index * 86400000).toISOString().slice(0, 10);
     const row = dates.get(date);
     return {
@@ -163,10 +163,14 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
   const names = new Map(productRecords.map(p => [p.shopifyProductId, p.title]));
   return {
     available: true as const,
-    periodDays: 30,
+    periodDays: days,
     recommendations, clicks, carts,
+    // Conversation engagement and product-level CTR use different denominators.
+    conversationEngagementRate: boundedRate(clicks.conversations, recommendations.conversations),
+    productClickThroughRate: boundedRate(clicks.events, recommendations.events),
     clickThroughRate: boundedRate(clicks.conversations, recommendations.conversations),
     addToCartRate: boundedRate(carts.conversations, clicks.conversations),
+    productCartRate: boundedRate(carts.events, clicks.events),
     trend,
     topProducts: products.map(p => ({
       productId: p.shopifyProductId,
@@ -174,6 +178,7 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
       clicks: numeric(p.clicks),
       carts: numeric(p.carts),
       recommendations: numeric(p.views),
+      productClickThroughRate: boundedRate(numeric(p.clicks), numeric(p.views)),
     })),
     attributionNote: "Engagement counts are deduplicated by signed product recommendation. Add-to-cart is counted only when the storefront detects a matching Shopify cart item. Some accelerated checkouts skip this step.",
   };
@@ -188,6 +193,7 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
 export async function countShopifyPaidClickConversions(
   businessId: string,
   paidConversationIds: string[],
+  days: 7 | 30 | 90 = 30,
 ) {
   if (!paidConversationIds.length) return 0;
   if (paidConversationIds.length > 60 ||
@@ -197,7 +203,7 @@ export async function countShopifyPaidClickConversions(
   await ensureTable();
   const since = new Date();
   since.setUTCHours(0, 0, 0, 0);
-  since.setUTCDate(since.getUTCDate() - 29);
+  since.setUTCDate(since.getUTCDate() - (days - 1));
   const placeholders = paidConversationIds.map(() => "?").join(",");
   const rows = await prisma.$queryRawUnsafe<Array<{total: bigint | number}>>(
     "SELECT COUNT(DISTINCT conversationId) AS total " +
