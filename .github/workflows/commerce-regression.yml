@@ -8,6 +8,7 @@ on:
       - "lib/shopify-catalog.ts"
       - "public/widget.js"
       - "app/api/widget/chat/route.ts"
+      - "app/api/internal/shopify-bridge/merchant/**"
       - "tests/commerce-regression.test.cjs"
       - "package.json"
       - ".github/workflows/commerce-regression.yml"
