@@ -8,6 +8,8 @@ on:
       - "lib/shopify-catalog.ts"
       - "lib/shopify-attribution.ts"
       - "lib/shopify-funnel.ts"
+      - "lib/shopify-merchant-list.ts"
+      - "app/api/internal/shopify-bridge/merchant/**"
       - "app/api/widget/commerce-event/**"
       - "app/api/shopify/storefront-widget/**"
       - "public/widget.js"
@@ -15,6 +17,7 @@ on:
       - "app/api/internal/shopify-bridge/merchant/**"
       - "tests/commerce-regression.test.cjs"
       - "tests/shopify-funnel.test.cjs"
+      - "tests/shopify-merchant-list.test.cjs"
       - "package.json"
       - ".github/workflows/commerce-regression.yml"
   pull_request:
