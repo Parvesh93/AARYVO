@@ -6,6 +6,7 @@ on:
     paths:
       - "lib/commerce-assistant.ts"
       - "lib/shopify-catalog.ts"
+      - "public/widget.js"
       - "app/api/widget/chat/route.ts"
       - "tests/commerce-regression.test.cjs"
       - "package.json"
@@ -30,6 +31,8 @@ jobs:
           node-version: "22"
       - name: Install testing dependencies without production postinstall
         run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Check storefront widget JavaScript syntax
+        run: node --check public/widget.js
       - name: Run shopping regression scenarios
         run: npm run test:commerce
       - name: Generate Prisma and type-check backend
