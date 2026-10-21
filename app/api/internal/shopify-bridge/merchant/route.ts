@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { entitlementsForPlan, hasFeature } from "@/lib/plan-entitlements";
+import { readShopifyFunnelSummary } from "@/lib/shopify-funnel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -448,10 +449,23 @@ export async function POST(request: Request) {
         const date = new Date(since.getTime() + i * 86400000).toISOString().slice(0, 10);
         return { date, conversations: counts.get(date) || 0 };
       });
+      let funnel: Awaited<ReturnType<typeof readShopifyFunnelSummary>> |
+        { available: false; message: string };
+      try {
+        funnel = await readShopifyFunnelSummary(businessId, store.id);
+      } catch (error) {
+        console.error("AARYVO Shopify funnel analytics unavailable",
+          error instanceof Error ? error.message : "unknown");
+        funnel = {
+          available: false,
+          message: "Recommendation funnel tracking is not yet available. Check the backend database migration or deployment.",
+        };
+      }
       return response({ ok: true, shop, resource, data: {
         conversations: count, leads, appointments, attention, won,
         monthlyConversationLimit: business.monthlyConversationLimit,
         trend, partialTrend: recent.length === 10000,
+        funnel,
       } });
     }
 
