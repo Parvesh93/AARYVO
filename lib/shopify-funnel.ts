@@ -159,3 +159,33 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
     attributionNote: "Engagement counts are deduplicated by signed product recommendation. Add-to-cart is counted only when the storefront detects a matching Shopify cart item. Some accelerated checkouts skip this step.",
   };
 }
+
+
+/**
+ * Exact click-to-paid conversion cohort. The Shopify app sends only conversation
+ * IDs extracted from signed, verified paid-order references through its HMAC-
+ * authenticated server bridge. The returned value contains only a count.
+ */
+export async function countShopifyPaidClickConversions(
+  businessId: string,
+  paidConversationIds: string[],
+) {
+  if (!paidConversationIds.length) return 0;
+  if (paidConversationIds.length > 60 ||
+      paidConversationIds.some(id => !/^[A-Za-z0-9_-]{10,80}$/.test(id))) {
+    throw new Error("Invalid verified purchase conversation set.");
+  }
+  await ensureTable();
+  const since = new Date();
+  since.setUTCHours(0, 0, 0, 0);
+  since.setUTCDate(since.getUTCDate() - 29);
+  const placeholders = paidConversationIds.map(() => "?").join(",");
+  const rows = await prisma.$queryRawUnsafe<Array<{total: bigint | number}>>(
+    "SELECT COUNT(DISTINCT conversationId) AS total " +
+    "FROM shopify_funnel_event " +
+    "WHERE businessId=? AND eventType='PRODUCT_CLICK' AND createdAt>=? " +
+    "AND conversationId IN (" + placeholders + ")",
+    businessId, since, ...paidConversationIds,
+  );
+  return numeric(rows[0]?.total);
+}
