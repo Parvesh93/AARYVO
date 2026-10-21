@@ -6,10 +6,15 @@ on:
     paths:
       - "lib/commerce-assistant.ts"
       - "lib/shopify-catalog.ts"
+      - "lib/shopify-attribution.ts"
+      - "lib/shopify-funnel.ts"
+      - "app/api/widget/commerce-event/**"
+      - "app/api/shopify/storefront-widget/**"
       - "public/widget.js"
       - "app/api/widget/chat/route.ts"
       - "app/api/internal/shopify-bridge/merchant/**"
       - "tests/commerce-regression.test.cjs"
+      - "tests/shopify-funnel.test.cjs"
       - "package.json"
       - ".github/workflows/commerce-regression.yml"
   pull_request:
