@@ -72,7 +72,7 @@ export async function GET(request: Request) {
     // Host header, so Shopify storefronts do not receive mixed-content URLs.
     // The Shopify embed is installed from this production domain. Avoid
     // pointing browsers to an obsolete NEXT_PUBLIC_APP_URL or staging host.
-    const widgetUrl = "https://aaryvo.ppdesigntech.com/api/widget-script";
+    const widgetUrl = "https://aaryvo.ppdesigntech.com/api/widget-script?v=shopify-buy-now-attribution-20261021";
 
     // Both values originate from the database or this server URL and are
     // JSON-encoded, so they cannot inject code into the JavaScript response.
