@@ -412,7 +412,7 @@ export async function POST(request: Request) {
           if (dueAt === "") {
             values.followUpDueAt = null;
           } else if (typeof dueAt === "string" &&
-                     /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/.test(dueAt) &&
+                     /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(dueAt) &&
                      Number.isFinite(Date.parse(dueAt)) &&
                      Date.parse(dueAt) > Date.UTC(2000,0,1) &&
                      Date.parse(dueAt) < Date.UTC(2100,0,1)) {
