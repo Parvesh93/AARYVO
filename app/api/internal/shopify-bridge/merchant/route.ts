@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { entitlementsForPlan, hasFeature } from "@/lib/plan-entitlements";
-import { readShopifyFunnelSummary } from "@/lib/shopify-funnel";
+import { readShopifyFunnelSummary, countShopifyPaidClickConversions } from "@/lib/shopify-funnel";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -424,6 +424,19 @@ export async function POST(request: Request) {
         if (!result.count) return response({ ok: false, message: "Appointment not found." }, 404);
         return response({ ok: true, shop, resource, message: "Appointment updated." });
       }
+    }
+
+    if (resource === "analytics" && operation === "detail") {
+      const ids = data.conversationIds;
+      if (!Array.isArray(ids) || ids.length > 60 ||
+          ids.some(id => typeof id !== "string" || !/^[A-Za-z0-9_-]{10,80}$/.test(id))) {
+        return response({ ok: false, message: "Invalid paid-order conversation references." }, 400);
+      }
+      const convertedConversations = await countShopifyPaidClickConversions(
+        businessId, [...new Set(ids as string[])],
+      );
+      return response({ ok: true, shop, resource,
+        data: { convertedConversations } });
     }
 
     if (resource === "analytics" && operation === "read") {
