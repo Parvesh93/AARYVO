@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 const PATH = "/api/internal/shopify-bridge/merchant";
 const MAX_AGE_MS = 120_000;
 const allowedResources = new Set([
-  "overview", "assistant", "widget", "conversations", "leads",
+  "overview", "products", "assistant", "widget", "conversations", "leads",
   "knowledge", "appointments", "analytics", "settings",
 ]);
 
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
     if (!link) return response({ ok: false, message: "Connect this store to AARYVO first." }, 403);
     const store = await prisma.shopifyStore.findUnique({
       where: { shopDomain: shop },
-      select: { businessId: true, status: true },
+      select: { id: true, businessId: true, status: true },
     });
     if (!store || store.businessId !== link.businessId || store.status !== "CONNECTED") {
       return response({ ok: false, message: "Shopify workspace connection is not active." }, 403);
@@ -158,6 +158,40 @@ export async function POST(request: Request) {
           needsHuman: item.needsHuman, customer: item.lead?.name || "Shopper",
           leadStatus: item.lead?.status || null,
           preview: item.messages[0]?.content.slice(0, 250) || "",
+        })),
+      } });
+    }
+
+    if (resource === "products" && operation === "read") {
+      const page = integer(data.page, 0, 100) ?? 0;
+      const pageSize = 50;
+      const query = typeof data.search === "string" ? data.search.trim().slice(0, 80) : "";
+      const where = {
+        storeId: store.id,
+        ...(query ? { title: { contains: query } } : {}),
+      };
+      const [total, items] = await Promise.all([
+        prisma.shopifyProduct.count({ where }),
+        prisma.shopifyProduct.findMany({
+          where, orderBy: { title: "asc" }, skip: page * pageSize, take: pageSize,
+          select: {
+            id: true, title: true, handle: true, status: true, productType: true,
+            currencyCode: true, minPrice: true, maxPrice: true,
+            onlineStoreUrl: true, featuredImageUrl: true, syncedAt: true,
+            variants: { take: 50, select: { availableForSale: true } },
+          },
+        }),
+      ]);
+      return response({ ok: true, shop, resource, data: {
+        total, page, pageSize, search: query,
+        items: items.map(p => ({
+          id: p.id, title: p.title, status: p.status || "UNKNOWN",
+          type: p.productType || "", currencyCode: p.currencyCode || "INR",
+          minPrice: p.minPrice, maxPrice: p.maxPrice,
+          imageUrl: p.featuredImageUrl || null,
+          url: p.onlineStoreUrl || (p.handle ? "https://" + shop + "/products/" + encodeURIComponent(p.handle) : null),
+          available: p.variants.some(v => v.availableForSale),
+          syncedAt: p.syncedAt.toISOString(),
         })),
       } });
     }
