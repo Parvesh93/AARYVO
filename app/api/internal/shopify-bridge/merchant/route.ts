@@ -471,7 +471,7 @@ export async function POST(request: Request) {
           error instanceof Error ? error.message : "unknown");
         funnel = {
           available: false,
-          message: "Recommendation funnel tracking is not yet available. Check the backend database migration or deployment.",
+          message: "Recommendation funnel tracking is unavailable. Check that the latest Hostinger backend is deployed and its MySQL user can create the funnel event table.",
         };
       }
       return response({ ok: true, shop, resource, data: {
