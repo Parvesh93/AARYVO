@@ -172,6 +172,7 @@ function safeStorefrontUrl(
 
 export type ShopifyCatalogProduct = {
   id: string;
+  shopifyProductId: string;
   title: string;
   description: string;
   vendor: string | null;
@@ -466,6 +467,7 @@ export async function searchShopifyCatalog(
 
   return selected.map(({ product }) => ({
     id: product.id,
+    shopifyProductId: product.shopifyProductId,
     title: product.title,
     description: (product.description || "").replace(/\s+/g, " ").trim().slice(0, 420),
     vendor: product.vendor,
@@ -530,6 +532,7 @@ export async function getShopifyProductFromPage(
 
   return {
     id: product.id,
+    shopifyProductId: product.shopifyProductId,
     title: product.title,
     description: (product.description || "").replace(/\s+/g, " ").trim().slice(0, 420),
     vendor: product.vendor,
