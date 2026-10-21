@@ -108,7 +108,7 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
     carts: bigint | number;
     views: bigint | number;
   };
-  const [totals, days, products] = await Promise.all([
+  const [totals, dailyGroups, products] = await Promise.all([
     prisma.$queryRawUnsafe<EventRow[]>(
       "SELECT eventType, COUNT(*) AS total, COUNT(DISTINCT conversationId) AS sessions " +
       "FROM shopify_funnel_event WHERE businessId=? AND createdAt>=? GROUP BY eventType",
@@ -142,7 +142,7 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
   const recommendations = byType.RECOMMENDATION_VIEW || empty;
   const clicks = byType.PRODUCT_CLICK || empty;
   const carts = byType.ADD_TO_CART || empty;
-  const dates = new Map(days.map(d => [d.day, d]));
+  const dates = new Map(dailyGroups.map(d => [d.day, d]));
   const trend: Trend[] = Array.from({ length: days }, (_, index) => {
     const date = new Date(since.getTime() + index * 86400000).toISOString().slice(0, 10);
     const row = dates.get(date);
