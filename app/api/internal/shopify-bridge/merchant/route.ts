@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { entitlementsForPlan, hasFeature } from "@/lib/plan-entitlements";
 import { readShopifyFunnelSummary, countShopifyPaidClickConversions } from "@/lib/shopify-funnel";
+import { listQuery, searchPage } from "@/lib/shopify-merchant-list";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,18 +50,6 @@ function allowUpdate(input: JsonRecord, fields: Record<string, (v: unknown) => u
   if (!Object.keys(updates).length) throw new Error("No settings provided.");
   return updates;
 }
-type ListQuery = { page: number; pageSize: number; search: string };
-function listQuery(data: JsonRecord): ListQuery {
-  return {
-    page: integer(data.page, 0, 2000) ?? 0,
-    pageSize: 25,
-    search: typeof data.search === "string" ? data.search.trim().slice(0, 80) : "",
-  };
-}
-function searchPage<T>(items: T[], total: number, query: ListQuery, extra: JsonRecord = {}) {
-  return { items, total, ...query, pageCount: Math.ceil(total / query.pageSize), ...extra };
-}
-
 function enumField(values: readonly string[]) {
   return (value: unknown) => typeof value === "string" && values.includes(value) ? value : null;
 }
