@@ -427,21 +427,24 @@ export async function POST(request: Request) {
     }
 
     if (resource === "analytics" && operation === "detail") {
+      const days: 7 | 30 | 90 = data.days === 7 || data.days === 90 ? data.days : 30;
       const ids = data.conversationIds;
       if (!Array.isArray(ids) || ids.length > 60 ||
           ids.some(id => typeof id !== "string" || !/^[A-Za-z0-9_-]{10,80}$/.test(id))) {
         return response({ ok: false, message: "Invalid paid-order conversation references." }, 400);
       }
       const convertedConversations = await countShopifyPaidClickConversions(
-        businessId, [...new Set(ids as string[])],
+        businessId, [...new Set(ids as string[])], days,
       );
       return response({ ok: true, shop, resource,
         data: { convertedConversations } });
     }
 
     if (resource === "analytics" && operation === "read") {
-      const since = new Date(Date.now() - 29 * 86400000);
+      const days: 7 | 30 | 90 = data.days === 7 || data.days === 90 ? data.days : 30;
+      const since = new Date();
       since.setUTCHours(0, 0, 0, 0);
+      since.setUTCDate(since.getUTCDate() - (days - 1));
       const [count, leads, appointments, recent, attention, won] = await Promise.all([
         prisma.conversation.count({ where: { agent: { businessId }, startedAt: { gte: since } } }),
         prisma.lead.count({ where: { businessId, createdAt: { gte: since } } }),
@@ -458,14 +461,14 @@ export async function POST(request: Request) {
         const date = row.startedAt.toISOString().slice(0, 10);
         counts.set(date, (counts.get(date) || 0) + 1);
       }
-      const trend = Array.from({ length: 30 }, (_, i) => {
+      const trend = Array.from({ length: days }, (_, i) => {
         const date = new Date(since.getTime() + i * 86400000).toISOString().slice(0, 10);
         return { date, conversations: counts.get(date) || 0 };
       });
       let funnel: Awaited<ReturnType<typeof readShopifyFunnelSummary>> |
         { available: false; message: string };
       try {
-        funnel = await readShopifyFunnelSummary(businessId, store.id);
+        funnel = await readShopifyFunnelSummary(businessId, store.id, days);
       } catch (error) {
         console.error("AARYVO Shopify funnel analytics unavailable",
           error instanceof Error ? error.message : "unknown");
@@ -477,7 +480,7 @@ export async function POST(request: Request) {
       return response({ ok: true, shop, resource, data: {
         conversations: count, leads, appointments, attention, won,
         monthlyConversationLimit: business.monthlyConversationLimit,
-        trend, partialTrend: recent.length === 10000,
+        days, trend, partialTrend: recent.length === 10000,
         funnel,
       } });
     }
