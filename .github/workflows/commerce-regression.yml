@@ -1,0 +1,32 @@
+name: Shopify Commerce Regression
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "lib/commerce-assistant.ts"
+      - "lib/shopify-catalog.ts"
+      - "app/api/widget/chat/route.ts"
+      - "tests/commerce-regression.test.cjs"
+      - "package.json"
+      - ".github/workflows/commerce-regression.yml"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  commerce:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install testing dependencies without production postinstall
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Run shopping regression scenarios
+        run: npm run test:commerce
