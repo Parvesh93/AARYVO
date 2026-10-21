@@ -198,8 +198,8 @@ function namesShoppingCategory(message: string, overview: ShopifyCatalogOverview
 // "Do you have any gowns?" is a new shopping request, not a refinement
 // of the previous "floral dresses under ₹5,000" request.
 function startsNewCommerceRequest(message: string, overview: ShopifyCatalogOverview | null) {
-  if (isFlexibleCommerceAnswer(message)) return false;
   if (namesShoppingCategory(message, overview)) return true;
+  if (isFlexibleCommerceAnswer(message)) return false;
   return /\b(?:show me|do you have|have any|can you (?:show|recommend|suggest)|recommend (?:me |something)|suggest (?:me |something)|find me|i (?:want|need|am looking for)|looking for|what (?:do you have|can you recommend))\b/i.test(message) &&
     looksLikeCommerceIntent(message, overview) &&
     !/^\s*(?:show|give|recommend|suggest)\s+(?:me\s+)?\d{1,2}\s*$/i.test(message);
@@ -282,11 +282,10 @@ function isBaseCommerceMessage(
   message: string,
   overview: ShopifyCatalogOverview | null,
 ) {
-  return (
-    !isFlexibleCommerceAnswer(message) &&
-    !isLikelyShopifyRefinement(message) &&
-    looksLikeCommerceIntent(message, overview)
-  );
+  return startsNewCommerceRequest(message, overview) ||
+    (!isFlexibleCommerceAnswer(message) &&
+      !isLikelyShopifyRefinement(message) &&
+      looksLikeCommerceIntent(message, overview));
 }
 
 function requestedProductCount(message: string) {
@@ -382,7 +381,7 @@ export function deriveCommerceState(params: {
     .find((part) =>
       CATEGORY_TERMS.some((term) => phraseIn(normalize(part), term)) ||
       (overview?.productTypes || []).some(
-        (type) => phraseIn(part, type) || phraseIn(type, part),
+        (type) => phraseIn(part, type),
       ),
     );
   const searchQuery =
