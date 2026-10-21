@@ -334,14 +334,18 @@ export async function POST(request: Request) {
         const c = await prisma.conversation.findFirst({
           where: { id, agent: { businessId } }, select: {
             id: true, needsHuman: true, attentionReason: true,
-            messages: { take: 150, orderBy: { createdAt: "asc" },
+            _count: { select: { messages: true } },
+            messages: { take: 150, orderBy: { createdAt: "desc" },
               select: { role: true, content: true, createdAt: true } },
           },
         });
         if (!c) return response({ ok: false, message: "Conversation not found." }, 404);
         return response({ ok: true, shop, resource, data: {
           id: c.id, needsHuman: c.needsHuman, attentionReason: c.attentionReason || "",
-          messages: c.messages.map(m => ({ ...m, createdAt: m.createdAt.toISOString() })),
+          totalMessages: c._count.messages, truncated: c._count.messages > 150,
+          messages: [...c.messages].reverse().map(m => ({
+            ...m, createdAt: m.createdAt.toISOString(),
+          })),
         } });
       }
       if (operation === "resolve") {
