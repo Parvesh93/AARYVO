@@ -34,6 +34,7 @@ const CATEGORY_SYNONYMS: Record<string, string[]> = {
   top: ["top", "tops"],
   shirt: ["shirt", "shirts"],
   dress: ["dress", "dresses"],
+  gown: ["gown", "gowns"],
   pant: ["pant", "pants", "trouser", "trousers"],
   trouser: ["trouser", "trousers", "pant", "pants"],
   shoe: ["shoe", "shoes"],
@@ -42,6 +43,26 @@ const CATEGORY_SYNONYMS: Record<string, string[]> = {
   cleanser: ["cleanser", "cleansers"],
   cream: ["cream", "creams"],
 };
+
+const EXPLICIT_DESCRIPTORS: Record<string, string[]> = {
+  floral: ["floral", "flower", "flowers", "flowered"],
+  embroidered: ["embroidered", "embroidery"],
+  embroidery: ["embroidered", "embroidery"],
+  striped: ["striped", "stripes"],
+  sequined: ["sequined", "sequin", "sequins"],
+  printed: ["printed", "print"],
+  ruffled: ["ruffled", "ruffle"],
+  lace: ["lace"],
+  polka: ["polka"],
+};
+
+function requiredDescriptors(query: string) {
+  // Descriptive restrictions are AND-ed with the product category. This
+  // prevents "floral dresses" from matching ordinary dresses or floral tops.
+  return Object.entries(EXPLICIT_DESCRIPTORS)
+    .filter(([term]) => containsTerm(query, term))
+    .map(([, synonyms]) => synonyms);
+}
 
 function requiredCategoryTerms(query: string) {
   const normalized = normalize(query);
@@ -57,6 +78,10 @@ const TERM_SYNONYMS: Record<string, string[]> = {
   jewellery: ["jewelry"],
   jewelry: ["jewellery"],
   ring: ["rings"],
+  gown: ["gowns"],
+  gowns: ["gown"],
+  dress: ["dresses"],
+  dresses: ["dress"],
   rings: ["ring"],
   bracelet: ["bracelets", "bangle", "bangles"],
   bracelets: ["bracelet", "bangle", "bangles"],
@@ -277,6 +302,7 @@ export async function searchShopifyCatalog(
 ): Promise<ShopifyCatalogProduct[]> {
   const terms = searchTerms(query);
   const categoryTerms = requiredCategoryTerms(query);
+  const descriptorGroups = requiredDescriptors(query);
   const maxPrice = priceCeiling(query);
   const broadDiscovery = isBroadDiscoveryQuery(query);
   const wantsAvailable = /\b(in stock|available now|available|ready to ship)\b/i.test(query);
@@ -319,6 +345,18 @@ export async function searchShopifyCatalog(
     ) {
       return false;
     }
+
+    // Every explicit merchandising descriptor must also be documented in
+    // the synced product metadata. Keyword OR matching alone is insufficient.
+    const descriptiveStructured = normalize([
+      product.title,
+      product.productType || "",
+      product.tags || "",
+      product.description || "",
+    ].join(" "));
+    if (descriptorGroups.some((group) =>
+      !group.some((term) => containsTerm(descriptiveStructured, term))
+    )) return false;
 
     const structured = normalize([
       product.title,
