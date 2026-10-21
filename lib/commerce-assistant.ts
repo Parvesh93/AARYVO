@@ -266,6 +266,10 @@ export function hasSpecificCommerceProductIntent(
 export function shouldClarifyCommerceBeforeProducts(state: CommerceState) {
   if (state.flexible || state.requestedCount) return false;
   if (state.specificProductIntent) return false;
+  // The occasion plus intended shopper already provide enough context for
+  // useful choices: recommend wedding outfits instead of asking a third
+  // question about budget before showing anything.
+  if (state.intent.occasion && state.intent.recipient) return false;
   if (!state.broad || state.clarificationCount >= 3) return false;
 
   // Broad gifting/discovery flows should feel like a good salesperson:
