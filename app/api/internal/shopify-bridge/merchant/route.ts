@@ -49,6 +49,18 @@ function allowUpdate(input: JsonRecord, fields: Record<string, (v: unknown) => u
   if (!Object.keys(updates).length) throw new Error("No settings provided.");
   return updates;
 }
+type ListQuery = { page: number; pageSize: number; search: string };
+function listQuery(data: JsonRecord): ListQuery {
+  return {
+    page: integer(data.page, 0, 2000) ?? 0,
+    pageSize: 25,
+    search: typeof data.search === "string" ? data.search.trim().slice(0, 80) : "",
+  };
+}
+function searchPage<T>(items: T[], total: number, query: ListQuery, extra: JsonRecord = {}) {
+  return { items, total, ...query, pageCount: Math.ceil(total / query.pageSize), ...extra };
+}
+
 function enumField(values: readonly string[]) {
   return (value: unknown) => typeof value === "string" && values.includes(value) ? value : null;
 }
@@ -284,21 +296,37 @@ export async function POST(request: Request) {
     if (resource === "conversations") {
       const gate = requires("conversationHistory"); if (gate) return gate;
       if (operation === "read") {
-        const items = await prisma.conversation.findMany({
-          where: { agent: { businessId } }, orderBy: { startedAt: "desc" }, take: 100,
-          select: { id: true, channel: true, startedAt: true,
-            needsHuman: true, resolvedAt: true, attentionReason: true,
-            lead: { select: { name: true, email: true, score: true } },
-            messages: { take: 1, orderBy: { createdAt: "desc" }, select: { content: true } },
-          },
-        });
-        return response({ ok: true, shop, resource, data: items.map(c => ({
+        const query = listQuery(data);
+        const status = data.status === "attention" || data.status === "resolved" ? data.status : "all";
+        const where = {
+          agent: { businessId },
+          ...(status === "attention" ? { needsHuman: true, resolvedAt: null } :
+            status === "resolved" ? { resolvedAt: { not: null } } : {}),
+          ...(query.search ? { OR: [
+            { lead: { is: { name: { contains: query.search } } } },
+            { lead: { is: { email: { contains: query.search } } } },
+            { id: { contains: query.search } },
+          ] } : {}),
+        };
+        const [total, items] = await Promise.all([
+          prisma.conversation.count({ where }),
+          prisma.conversation.findMany({
+            where, orderBy: [{ startedAt: "desc" }, { id: "desc" }],
+            skip: query.page * query.pageSize, take: query.pageSize,
+            select: { id: true, channel: true, startedAt: true,
+              needsHuman: true, resolvedAt: true, attentionReason: true,
+              lead: { select: { name: true, email: true, score: true } },
+              messages: { take: 1, orderBy: { createdAt: "desc" }, select: { content: true } },
+            },
+          }),
+        ]);
+        return response({ ok: true, shop, resource, data: searchPage(items.map(c => ({
           id: c.id, channel: c.channel, startedAt: c.startedAt.toISOString(),
           needsHuman: c.needsHuman, resolvedAt: c.resolvedAt?.toISOString() || null,
           attentionReason: c.attentionReason || "",
           customer: c.lead?.name || "Shopper", email: c.lead?.email || "",
           score: c.lead?.score || 0, preview: c.messages[0]?.content.slice(0, 220) || "",
-        })) });
+        })), total, query, { status }) });
       }
       if (operation === "detail") {
         const id = safeString(data.id, 50);
@@ -330,17 +358,34 @@ export async function POST(request: Request) {
 
     if (resource === "leads") {
       if (operation === "read") {
-        const rows = await prisma.lead.findMany({
-          where: { businessId }, take: 150, orderBy: { createdAt: "desc" },
-          select: { id: true, name: true, email: true, phone: true, requirement: true,
-            status: true, score: true, followUpStatus: true,
-            followUpNote: true, followUpDueAt: true, createdAt: true },
-        });
-        return response({ ok: true, shop, resource, data: rows.map(row => ({
+        const query = listQuery(data);
+        const stage = ["NEW","WARM","HOT","QUALIFIED","WON","LOST"].includes(String(data.status))
+          ? String(data.status) : "all";
+        const where = {
+          businessId,
+          ...(stage !== "all" ? { status: stage as "NEW"|"WARM"|"HOT"|"QUALIFIED"|"WON"|"LOST" } : {}),
+          ...(query.search ? { OR: [
+            { name: { contains: query.search } },
+            { email: { contains: query.search } },
+            { phone: { contains: query.search } },
+            { requirement: { contains: query.search } },
+          ] } : {}),
+        };
+        const [total, rows] = await Promise.all([
+          prisma.lead.count({ where }),
+          prisma.lead.findMany({
+            where, skip: query.page * query.pageSize, take: query.pageSize,
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            select: { id: true, name: true, email: true, phone: true, requirement: true,
+              status: true, score: true, followUpStatus: true,
+              followUpNote: true, followUpDueAt: true, createdAt: true },
+          }),
+        ]);
+        return response({ ok: true, shop, resource, data: searchPage(rows.map(row => ({
           ...row, score: feature("leadScoring") ? row.score : null,
           followUpDueAt: row.followUpDueAt?.toISOString() || null,
           createdAt: row.createdAt.toISOString(),
-        })) });
+        })), total, query, { status: stage }) });
       }
       if (operation === "save") {
         const id = safeString(data.id, 50);
@@ -362,18 +407,29 @@ export async function POST(request: Request) {
     if (resource === "knowledge") {
       if (!agent) return response({ ok: false, message: "No AI assistant configured." }, 404);
       if (operation === "read") {
-        const rows = await prisma.knowledgeItem.findMany({
-          where: { agentId: agent.id }, orderBy: { createdAt: "desc" }, take: 100,
-          select: { id: true, source: true, title: true, content: true, createdAt: true },
-        });
-        return response({ ok: true, shop, resource, data: rows.map(row => ({
+        const query = listQuery(data);
+        const source = data.source === "manual" || data.source === "automatic" ? data.source : "all";
+        const where = {
+          agentId: agent.id,
+          ...(source === "manual" ? { source: { startsWith: "manual:" } } :
+            source === "automatic" ? { NOT: { source: { startsWith: "manual:" } } } : {}),
+          ...(query.search ? { title: { contains: query.search } } : {}),
+        };
+        const [total, rows] = await Promise.all([
+          prisma.knowledgeItem.count({ where }),
+          prisma.knowledgeItem.findMany({
+            where, orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            skip: query.page * query.pageSize, take: query.pageSize,
+            select: { id: true, source: true, title: true, content: true, createdAt: true },
+          }),
+        ]);
+        return response({ ok: true, shop, resource, data: searchPage(rows.map(row => ({
           id: row.id, source: row.source, title: row.title || row.source,
-          // Limit UI response size, while preserving a read-only preview of
-          // automated Shopify data. Manually entered knowledge is editable.
+          // Manual content editable, Shopify-synced content read-only.
           content: row.content.slice(0, row.source.startsWith("manual:") ? 12000 : 1000),
           editable: row.source.startsWith("manual:"),
           createdAt: row.createdAt.toISOString(),
-        })) });
+        })), total, query, { source }) });
       }
       if (operation === "create") {
         const title = safeString(data.title, 120);
