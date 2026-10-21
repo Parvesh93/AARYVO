@@ -132,8 +132,17 @@ test("funnel backend deduplicates signed product-stage events and counts distinc
   assert.equal(result.clicks.conversations,2);
   assert.equal(result.carts.events,1);
   assert.equal(result.clickThroughRate,50);
+  assert.equal(result.conversationEngagementRate,50);
+  assert.equal(result.productClickThroughRate,37.5);
+  assert.equal(result.productCartRate,33.3);
   assert.equal(result.addToCartRate,50);
   assert.equal(result.trend.length,30);
+  for (const days of [7,90]) {
+    const window = await funnel.readShopifyFunnelSummary("business-1","store-1",days);
+    assert.equal(window.periodDays,days);
+    assert.equal(window.trend.length,days);
+    assert.equal(window.topProducts[0].productClickThroughRate,37.5);
+  }
   assert.equal(result.topProducts[0].title,"Scarlett Frill");
   const selectCalls=calls.filter(call=>call.sql.startsWith("SELECT"));
   assert.ok(selectCalls.every(call=>call.args[0]==="business-1"));
