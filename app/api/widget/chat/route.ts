@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { saveWidgetRichMessage } from "@/lib/widget-rich-history";
+import { createShopifyRecommendationMarker } from "@/lib/shopify-attribution";
 import { sendHumanAttentionNotification } from "@/lib/notifications";
 import { hasFeature } from "@/lib/plan-entitlements";
 import {
@@ -318,9 +319,10 @@ function leadIsReady(
   );
 }
 
-function productPayload(products: ShopifyCatalogProduct[]) {
+function productPayload(products: ShopifyCatalogProduct[], conversationId: string, shop: string | null) {
   return products.map((product) => ({
     id: product.id,
+    attributionToken: shop ? createShopifyRecommendationMarker({ shop, conversationId, productId: product.shopifyProductId }) : null,
     title: product.title,
     description: product.description,
     imageUrl: product.imageUrl,
@@ -1286,7 +1288,7 @@ Reply with conversational text only. Do not output JSON or interactive UI.`;
       shopifyProducts.length,
     );
 
-    const responseProducts = productPayload(shopifyProducts.slice(0, productLimit));
+    const responseProducts = productPayload(shopifyProducts.slice(0, productLimit), conversation.id, shopifyOverview?.shopDomain || null);
     try {
       await saveWidgetRichMessage({
         messageId: assistantMessage.id,
