@@ -1320,6 +1320,8 @@ Reply with conversational text only. Do not output JSON or interactive UI.`;
           ? {
               id: lead.id,
               name: lead.name,
+              email: lead.email,
+              phone: lead.phone,
               requirement: lead.requirement,
               budget: lead.budget,
               status: qualificationEnabled ? lead.status : "NEW",
