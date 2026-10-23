@@ -243,7 +243,8 @@ export async function POST(request: Request) {
         }
         return response({ ok: true, shop, resource, data: {
           ...obj, entitlements: entitlementsForPlan(business.plan),
-          eligible, store: shop,
+          eligible, plan: business.plan, subscriptionStatus: business.subscriptionStatus,
+          store: shop,
         } });
       }
       if (operation === "save") {
@@ -265,6 +266,14 @@ export async function POST(request: Request) {
           whatsappLabel: v => safeString(v, 80),
           whatsappMessage: v => safeString(v, 1000),
         });
+        if (inputs.whatsappEnabled === true) {
+          const configured = typeof inputs.whatsappNumber === "string"
+            ? inputs.whatsappNumber : agent.widgetWhatsappNumber;
+          const digits = String(configured || "").replace(/\D/g, "");
+          if (!/^[1-9][0-9]{7,14}$/.test(digits)) {
+            return response({ ok: false, message: "Enter a valid WhatsApp number with country code (8–15 digits)." }, 400);
+          }
+        }
         const advanced = ["launcherLabel", "launcherAnimation", "launcherLabelEnabled"];
         const branding = ["title", "subtitle", "welcomeMessage", "accentColor", "theme", "position", "launcherStyle", "showPoweredBy"];
         if (!feature("advancedWidgetControls") && advanced.some(k => k in inputs)) return response({ ok: false, message: "Growth plan required for launcher controls." }, 403);

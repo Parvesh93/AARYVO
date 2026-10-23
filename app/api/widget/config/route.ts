@@ -16,6 +16,8 @@ export async function POST(request: Request) {
     if (!agent?.isActive) return NextResponse.json({ error: "Agent not found." }, { status: 404, headers });
     if (!isAllowedWidgetOrigin(request, agent.business.websiteUrl)) return NextResponse.json({ error: "Unauthorized website." }, { status: 403, headers });
     const starter=hasFeature(agent.business.plan,"whatsappHandoff"),growth=hasFeature(agent.business.plan,"customWidgetBranding");
+    const whatsappDigits = String(agent.widgetWhatsappNumber || "").replace(/\D/g, "");
+    const validWhatsApp = /^[1-9][0-9]{7,14}$/.test(whatsappDigits);
     let quickPrompts=[{label:"Our services",value:"What services do you offer?"},{label:"Get pricing",value:"Can you tell me about pricing?"},{label:"Book consultation",value:"I want to book a consultation"},{label:"Talk to someone",value:"I want to talk to someone"}];
     try{const store=await prisma.shopifyStore.findUnique({where:{businessId:agent.businessId},select:{status:true}});if(store?.status==="CONNECTED")quickPrompts=[{label:"Find a product",value:"Help me find a product"},{label:"Shop by category",value:"What product categories do you have?"},{label:"Shipping & delivery",value:"Tell me about shipping and delivery"},{label:"Talk to someone",value:"I want to talk to someone"}]}catch{}
     return NextResponse.json({
@@ -25,8 +27,8 @@ export async function POST(request: Request) {
       startLabel: growth?agent.widgetStartLabel:"Start conversation →",
       bookLabel: starter?agent.widgetBookLabel:"Book a consultation",
       bookingEnabled: hasFeature(agent.business.plan,"appointments"),
-      whatsappEnabled: starter&&agent.widgetWhatsappEnabled,
-      whatsappNumber: starter?agent.widgetWhatsappNumber:null,
+      whatsappEnabled: starter&&agent.widgetWhatsappEnabled&&validWhatsApp,
+      whatsappNumber: starter&&validWhatsApp?whatsappDigits:null,
       whatsappLabel: starter?agent.widgetWhatsappLabel:"Continue on WhatsApp",
       whatsappMessage: starter?agent.widgetWhatsappMessage:null,
       accentColor: growth?agent.widgetAccentColor:"#111319",
