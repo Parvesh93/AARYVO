@@ -92,6 +92,8 @@ test("funnel backend deduplicates signed product-stage events and counts distinc
     $queryRawUnsafe:async(sql,...args)=>{
       calls.push({sql,args});
       if(sql.includes("AND conversationId IN"))return [{total:1n}];
+      if(sql.includes("AS convertedRecommendations"))
+        return [{convertedRecommendations:1n,convertedConversations:1n}];
       if(sql.includes("COUNT(DISTINCT conversationId)"))
         return [
           {eventType:"RECOMMENDATION_VIEW",total:8n,sessions:4n},
@@ -134,8 +136,13 @@ test("funnel backend deduplicates signed product-stage events and counts distinc
   assert.equal(result.clickThroughRate,50);
   assert.equal(result.conversationEngagementRate,50);
   assert.equal(result.productClickThroughRate,37.5);
-  assert.equal(result.productCartRate,33.3);
-  assert.equal(result.addToCartRate,50);
+  assert.equal(result.productCartRate,12.5);
+  assert.equal(result.addToCartRate,25);
+  assert.ok(calls.some(call=>call.sql.includes("ORDER BY carts DESC,clicks DESC,views DESC LIMIT 25")));
+  const matchedViewsQuery=calls.find(call=>call.sql.includes("AS convertedRecommendations"));
+  assert.ok(matchedViewsQuery);
+  assert.equal(matchedViewsQuery.args[0],"business-1");
+  assert.equal(matchedViewsQuery.args.length,3);
   assert.equal(result.trend.length,30);
   for (const days of [7,90]) {
     const window = await funnel.readShopifyFunnelSummary("business-1","store-1",days);

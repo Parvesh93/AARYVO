@@ -108,7 +108,11 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
     carts: bigint | number;
     views: bigint | number;
   };
-  const [totals, dailyGroups, products] = await Promise.all([
+  type ConvertedViewRow = {
+    convertedRecommendations: bigint | number;
+    convertedConversations: bigint | number;
+  };
+  const [totals, dailyGroups, products, convertedViews] = await Promise.all([
     prisma.$queryRawUnsafe<EventRow[]>(
       "SELECT eventType, COUNT(*) AS total, COUNT(DISTINCT conversationId) AS sessions " +
       "FROM shopify_funnel_event WHERE businessId=? AND createdAt>=? GROUP BY eventType",
@@ -129,8 +133,20 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
       "SUM(CASE WHEN eventType='ADD_TO_CART' THEN 1 ELSE 0 END) AS carts," +
       "SUM(CASE WHEN eventType='RECOMMENDATION_VIEW' THEN 1 ELSE 0 END) AS views " +
       "FROM shopify_funnel_event WHERE businessId=? AND createdAt>=? GROUP BY shopifyProductId " +
-      "ORDER BY clicks DESC,views DESC LIMIT 25",
+      "ORDER BY carts DESC,clicks DESC,views DESC LIMIT 25",
       businessId, since,
+    ),
+    // A direct Add to Cart does not require a product-page click. Measure
+    // true view-to-cart conversion on the same signed recommendation proof.
+    prisma.$queryRawUnsafe<ConvertedViewRow[]>(
+      "SELECT COUNT(DISTINCT v.tokenHash) AS convertedRecommendations, " +
+      "COUNT(DISTINCT v.conversationId) AS convertedConversations " +
+      "FROM shopify_funnel_event v INNER JOIN shopify_funnel_event c " +
+      "ON c.businessId=v.businessId AND c.tokenHash=v.tokenHash " +
+      "AND c.eventType='ADD_TO_CART' " +
+      "WHERE v.businessId=? AND v.eventType='RECOMMENDATION_VIEW' " +
+      "AND v.createdAt>=? AND c.createdAt>=?",
+      businessId, since, since,
     ),
   ]);
 
@@ -142,6 +158,9 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
   const recommendations = byType.RECOMMENDATION_VIEW || empty;
   const clicks = byType.PRODUCT_CLICK || empty;
   const carts = byType.ADD_TO_CART || empty;
+  const matchingViews = convertedViews[0];
+  const convertedRecommendationCount = numeric(matchingViews?.convertedRecommendations);
+  const convertedConversationCount = numeric(matchingViews?.convertedConversations);
   const dates = new Map(dailyGroups.map(d => [d.day, d]));
   const trend: Trend[] = Array.from({ length: days }, (_, index) => {
     const date = new Date(since.getTime() + index * 86400000).toISOString().slice(0, 10);
@@ -169,8 +188,8 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
     conversationEngagementRate: boundedRate(clicks.conversations, recommendations.conversations),
     productClickThroughRate: boundedRate(clicks.events, recommendations.events),
     clickThroughRate: boundedRate(clicks.conversations, recommendations.conversations),
-    addToCartRate: boundedRate(carts.conversations, clicks.conversations),
-    productCartRate: boundedRate(carts.events, clicks.events),
+    addToCartRate: boundedRate(convertedConversationCount, recommendations.conversations),
+    productCartRate: boundedRate(convertedRecommendationCount, recommendations.events),
     trend,
     topProducts: products.map(p => ({
       productId: p.shopifyProductId,
@@ -180,7 +199,7 @@ export async function readShopifyFunnelSummary(businessId: string, storeId: stri
       recommendations: numeric(p.views),
       productClickThroughRate: boundedRate(numeric(p.clicks), numeric(p.views)),
     })),
-    attributionNote: "Engagement counts are deduplicated by signed product recommendation. Add-to-cart is counted only when the storefront detects a matching Shopify cart item. Some accelerated checkouts skip this step.",
+    attributionNote: "Each product interaction is deduplicated by its signed recommendation, so adding the same recommendation twice does not count twice. Direct Add to Cart does not require a product-page click. View-to-cart rates count only cart events matched to a recorded impression. Accelerated checkouts may skip an observable cart event.",
   };
 }
 
