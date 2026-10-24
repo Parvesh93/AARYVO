@@ -241,7 +241,7 @@ test("Shopify policy lookup includes historic manual entries but not other agent
     {agentId:current,source:"shopify://product/123",title:"Product",content:"product"},
   ];
   const scoped=knowledge.scopeWidgetKnowledge(all,current);
-  assert.deepEqual(scoped.map(x=>x.title),["Current","Returns policy"]);
+  assert.deepEqual(Array.from(scoped,x=>x.title),["Current","Returns policy"]);
   const matched=knowledge.matchingManualPolicy(scoped,"Do you provide returns?");
   assert.equal(matched?.agentId,legacy);
   assert.match(knowledge.verifiedManualPolicyReply(matched),/Returns within 14 days/);
