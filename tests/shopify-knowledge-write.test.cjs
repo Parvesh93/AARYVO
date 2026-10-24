@@ -12,8 +12,10 @@ const appClientId="68cb452f44c0123456789abcdef01234";
 const shop="merchant-test.myshopify.com";
 const secret="secure-knowledge-bridge-test-secret-abcdef1234";
 const operations=[];
+const sqlCalls=[];
 let manualCount=0;
 let writeError=null;
+let selectedKnowledge={id:"manual-id",source:"manual:shopify-admin:manual-id"};
 
 const prisma={
   shopifyMerchantLink:{findUnique:async()=>({businessId:"biz"})},
@@ -23,8 +25,25 @@ const prisma={
     billingChannel:"SHOPIFY",monthlyConversationLimit:50,
   })},
   agent:{findFirst:async()=>({id:"agent-1",businessId:"biz"})},
+  $queryRawUnsafe:async (sql,...params)=>{
+    sqlCalls.push({sql,params});
+    if(sql.includes("COUNT(*)"))return [{total:BigInt(manualCount)}];
+    if(sql.includes("SELECT `id`"))return [{id:"manual-id"}];
+    throw Error("Unexpected SQL query");
+  },
   knowledgeItem:{
-    count:async()=>manualCount,
+    count:async args=>{
+      if(JSON.stringify(args).includes("startsWith"))
+        throw Object.assign(new Error("Illegal mix of collations"),{code:"P2039"});
+      return 1;
+    },
+    findFirst:async()=>selectedKnowledge,
+    findMany:async()=>[{
+      id:"manual-id",source:"manual:shopify-admin:manual-id",
+      title:"Shipping",content:"Delivery in 7 days",createdAt:new Date(),
+    }],
+    deleteMany:async args=>{operations.push({delete:args});return {count:1};},
+    updateMany:async args=>{operations.push({update:args});return {count:1};},
     create:async args=>{
       if(writeError)throw writeError;
       operations.push(args);
@@ -111,4 +130,36 @@ test("A database error returns safe diagnostic code without leaking SQL",async()
     assert.match(result.body.message,/database migrations/);
     assert.doesNotMatch(result.body.message,/mysql host|sensitive/);
   }finally{console.error=original;writeError=null}
+});
+
+test("manual knowledge cap query does not use LIKE and binds shop agent",async()=>{
+  sqlCalls.length=0;manualCount=0;writeError=null;
+  const result=await call({title:"Delivery",content:"Within seven days"});
+  assert.equal(result.status,200);
+  assert.ok(sqlCalls.some(item=>item.sql.includes("CAST(`source` AS BINARY)")));
+  assert.ok(sqlCalls.every(item=>!item.sql.includes("LIKE")));
+  assert.ok(sqlCalls.every(item=>item.params[0]==="agent-1"));
+});
+test("manual source filtering avoids mixed-collation LIKE with accurate pagination",async()=>{
+  sqlCalls.length=0;manualCount=1;writeError=null;
+  const result=await call({page:0,source:"manual",search:"Ship"},"read");
+  assert.equal(result.status,200);
+  assert.equal(result.body.data.total,1);
+  assert.equal(result.body.data.items.length,1);
+  assert.equal(result.body.data.items[0].editable,true);
+  assert.ok(sqlCalls.some(item=>item.sql.includes("LOCATE(")));
+  assert.ok(sqlCalls.every(item=>!item.sql.includes("LIKE")));
+  assert.ok(sqlCalls.some(item=>item.params.includes("Ship")));
+});
+test("saving and deleting knowledge cannot modify Shopify-synced records",async()=>{
+  operations.length=0;selectedKnowledge={id:"synced",source:"shopify://product/123"};
+  let result=await call({id:"synced",title:"Changed",content:"Changed"},"save");
+  assert.equal(result.status,404);
+  result=await call({id:"synced"},"delete");
+  assert.equal(result.status,404);
+  assert.equal(operations.length,0);
+  selectedKnowledge={id:"manual-id",source:"manual:shopify-admin:manual-id"};
+  result=await call({id:"manual-id",title:"Changed",content:"New content"},"save");
+  assert.equal(result.status,200);
+  assert.equal(operations[0].update.where.source,"manual:shopify-admin:manual-id");
 });
