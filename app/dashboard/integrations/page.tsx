@@ -25,6 +25,28 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
   });
   if (!member) redirect("/onboarding");
 
+  // A website login may have both a standalone AARYVO workspace and a
+  // Shopify-provisioned workspace. Show both without merging or transferring
+  // subscriptions, and keep Shopify's embedded admin as the store workspace UI.
+  const linkedMemberships = await prisma.businessMember.findMany({
+    where: { userId: session.userId },
+    select: {
+      business: {
+        select: {
+          name: true,
+          billingChannel: true,
+          shopifyMerchantLinks: {
+            select: { shopDomain: true },
+            take: 10,
+          },
+        },
+      },
+    },
+  });
+  const linkedShops = [...new Set(linkedMemberships
+    .filter(item => item.business.billingChannel === "SHOPIFY")
+    .flatMap(item => item.business.shopifyMerchantLinks.map(link => link.shopDomain)))];
+
   const params = await searchParams;
   const shopifyState = typeof params.shopify === "string" ? params.shopify : null;
   const messageParam = typeof params.message === "string" ? params.message : null;
@@ -69,6 +91,43 @@ export default async function IntegrationsPage({ searchParams }: { searchParams:
       </p>
 
       <div className="mt-7 space-y-4">
+        {params.accountLink === "success" && (
+          <div role="status" className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm leading-6 text-emerald-900">
+            Your AARYVO website login is now connected to the authorized Shopify
+            workspace. No subscription or business data was moved.
+          </div>
+        )}
+        {linkedShops.length > 0 && (
+          <section className="rounded-3xl border border-black/[.07] bg-white p-6 md:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[.14em] text-black/40">
+                  VERIFIED SHOPIFY WORKSPACES
+                </p>
+                <h2 className="mt-2 text-lg font-semibold">Shopify stores linked to this login</h2>
+                <p className="mt-2 text-xs leading-6 text-black/50">
+                  Manage these stores inside Shopify Admin. Any standalone AARYVO
+                  business remains separate, including its existing billing.
+                </p>
+              </div>
+              <span className="rounded-full bg-[#edf7ee] px-3 py-2 text-xs font-semibold text-[#307648]">
+                {linkedShops.length} linked
+              </span>
+            </div>
+            <div className="mt-5 space-y-3">
+              {linkedShops.map(shop => (
+                <div key={shop} className="flex flex-col gap-3 rounded-2xl border border-black/10 bg-[#f8faf9] p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <span className="break-all text-sm font-semibold">{shop}</span>
+                  <a href={`https://${shop}/admin/apps`} target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 rounded-full border border-black/10 bg-white px-4 py-2.5 text-center text-xs font-semibold">
+                    Open Shopify Admin ↗
+                  </a>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
         <ShopifyIntegrationCard
           enabled={shopifyEnabled}
           requiredPlan="Starter"
