@@ -85,3 +85,14 @@ export function verifiedManualPolicyReply(item: WidgetKnowledgeItem): string | n
   const heading = (item.title || "store policy").trim();
   return "Here's our " + heading + ":\n\n" + body;
 }
+
+/** Storefront knowledge scope: Shopify manual entries belong to the merchant
+ * workspace, but crawled pages belong only to the current assistant. */
+export function scopeWidgetKnowledge<T extends WidgetKnowledgeItem & {agentId: string}>(
+  items: T[], activeAgentId: string,
+) {
+  return items.filter(item =>
+    !item.source.startsWith("shopify://") &&
+    (item.agentId === activeAgentId || item.source.startsWith("manual:")),
+  );
+}

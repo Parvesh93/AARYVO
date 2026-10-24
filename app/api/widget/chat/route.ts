@@ -5,6 +5,8 @@ import { saveWidgetRichMessage } from "@/lib/widget-rich-history";
 import {
   matchingManualPolicy,
   rankWidgetKnowledge,
+  requestedPolicyTopic,
+  scopeWidgetKnowledge,
   verifiedManualPolicyReply,
 } from "@/lib/widget-knowledge";
 import { createShopifyRecommendationMarker } from "@/lib/shopify-attribution";
@@ -696,22 +698,38 @@ export async function POST(request: Request) {
       title: string | null;
       source: string;
       content: string;
+      agentId: string;
+      createdAt: Date;
     }> = [];
+    let knowledgeLoadFailed = false;
 
     try {
+      // Shopify is one merchant workspace. Older Admin versions sometimes
+      // saved manual answers to a historical assistant while the storefront
+      // loaded a different active assistant. Include manual entries from that
+      // SAME business only; keep crawl pages scoped to this exact agent.
       const allKnowledgeItems = await prisma.knowledgeItem.findMany({
-        where: { agentId: agent.id },
-        orderBy: { createdAt: "asc" },
+        where: agent.business.billingChannel === "SHOPIFY"
+          ? { agent: { businessId: agent.businessId } }
+          : { agentId: agent.id },
+        orderBy: { createdAt: "desc" },
+        select: {
+          title: true, source: true, content: true,
+          agentId: true, createdAt: true,
+        },
       });
 
-      websiteKnowledgeItems = allKnowledgeItems.filter(
-        (item) => !item.source.startsWith("shopify://"),
+      websiteKnowledgeItems = rankWidgetKnowledge(
+        scopeWidgetKnowledge(allKnowledgeItems, agent.id),
+        message,
       );
-      // Older website crawl pages can exceed the prompt's 30k character
-      // knowledge cap. Manual policies must be loaded first for FAQ requests.
-      websiteKnowledgeItems = rankWidgetKnowledge(websiteKnowledgeItems, message);
     } catch (error) {
-      console.error("AARYVO website knowledge read error", error);
+      knowledgeLoadFailed = true;
+      console.error("AARYVO website knowledge read error", {
+        code: typeof error === "object" && error !== null && "code" in error
+          ? String(error.code) : "UNKNOWN",
+        businessId: agent.businessId,
+      });
     }
 
     let shopifyConnected = false;
@@ -796,6 +814,19 @@ export async function POST(request: Request) {
       ? matchingManualPolicy(websiteKnowledgeItems, message)
       : null;
     const directPolicyReply = manualPolicy ? verifiedManualPolicyReply(manualPolicy) : null;
+    // Minimal operational diagnostics for policy questions. No policy text,
+    // customer details or secrets are written to logs or response metadata.
+    const policyTopic = shopifyConnected ? requestedPolicyTopic(message) : null;
+    if (policyTopic) console.info("AARYVO_POLICY_LOOKUP", {
+      version: "business-manual-v2",
+      businessId: agent.businessId, agentId: agent.id,
+      topic: policyTopic,
+      manualEntries: websiteKnowledgeItems.filter(item =>
+        item.source.startsWith("manual:")).length,
+      matched: Boolean(manualPolicy),
+      matchedActiveAgent: manualPolicy ? manualPolicy.agentId === agent.id : null,
+      knowledgeLoadFailed,
+    });
     const contextualMessage =
       currentPageProduct &&
       /\b(this|it|this product|this item|this one|same product|same item)\b/i.test(message)
@@ -1324,6 +1355,13 @@ Reply with conversational text only. Do not output JSON or interactive UI.`;
         reply,
         ui: resolvedUi,
         products: responseProducts,
+        policyResolution: policyTopic
+          ? {
+              version: "business-manual-v2",
+              matched: Boolean(manualPolicy),
+              knowledgeLoaded: !knowledgeLoadFailed,
+            }
+          : undefined,
         commerce: commerceState.active
           ? {
               active: true,

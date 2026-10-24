@@ -230,3 +230,27 @@ test("Shopify knowledge CRUD selects the storefront's active assistant",()=>{
   assert.match(source,/activeKnowledgeAgent\.id/);
   assert.doesNotMatch(source,/agent\.id/);
 });
+
+test("Shopify policy lookup includes historic manual entries but not other agent crawl pages",()=>{
+  const current="active-agent",legacy="historic-agent";
+  const all=[
+    {agentId:current,source:"https://site/current",title:"Current",content:"current"},
+    {agentId:legacy,source:"manual:shopify-admin:policy",title:"Returns policy",
+      content:"Returns within 14 days."},
+    {agentId:legacy,source:"https://other.site/old",title:"Old",content:"old"},
+    {agentId:current,source:"shopify://product/123",title:"Product",content:"product"},
+  ];
+  const scoped=knowledge.scopeWidgetKnowledge(all,current);
+  assert.deepEqual(scoped.map(x=>x.title),["Current","Returns policy"]);
+  const matched=knowledge.matchingManualPolicy(scoped,"Do you provide returns?");
+  assert.equal(matched?.agentId,legacy);
+  assert.match(knowledge.verifiedManualPolicyReply(matched),/Returns within 14 days/);
+});
+test("Shopify chat queries manual knowledge by business but keeps standalone agent scope",()=>{
+  const route=fs.readFileSync(path.join(__dirname,"..","app/api/widget/chat/route.ts"),"utf8");
+  assert.match(route,/agent\.business\.billingChannel === "SHOPIFY"/);
+  assert.match(route,/agent: \{ businessId: agent\.businessId \}/);
+  assert.match(route,/scopeWidgetKnowledge\(allKnowledgeItems, agent\.id\)/);
+  assert.match(route,/version: "business-manual-v2"/);
+  assert.match(route,/AARYVO_POLICY_LOOKUP/);
+});
