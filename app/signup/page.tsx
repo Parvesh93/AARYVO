@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, CheckCircle2, ShoppingBag, Globe2, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, Globe2, ShieldCheck } from "lucide-react";
+import Image from "next/image";
 import MarketingFooter from "../_components/MarketingFooter";
 import MarketingHeader from "../_components/MarketingHeader";
 
@@ -46,7 +47,7 @@ export default async function SignupPage({
       </div>
       <div className="mt-11 grid gap-5 md:grid-cols-2">
         <article className="flex flex-col rounded-[30px] border border-black/10 bg-[#f9f7f1] p-7 shadow-[0_18px_55px_rgba(0,0,0,.045)] sm:p-9">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-[#e6f1df] text-[#327f53]"><ShoppingBag size={26}/></span>
+          <span className="relative block h-16 w-36 overflow-hidden rounded-2xl bg-[#e6f1df]"><Image src="/shopify-logo.webp" alt="Shopify" fill sizes="144px" className="object-contain p-2" priority/></span>
           <span className="mt-7 text-xs font-semibold uppercase tracking-[.15em] text-black/40">FOR SHOPIFY STORES</span>
           <h2 className="mt-3 text-2xl font-semibold tracking-[-.035em]">Connect through Shopify</h2>
           <p className="mt-3 text-sm leading-7 text-black/55">
