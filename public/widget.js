@@ -244,7 +244,7 @@ function safeCartError(error,status){
 }
 async function verifyShopifyCartAttribution(product,variantId){
   const token=product.attributionToken;
-  if(typeof token!=="string"||!/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$/.test(token)){
+  if(typeof token!=="string"||!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(token)){
     console.warn("AARYVO cart attribution: signed product marker missing");
     return;
   }

@@ -153,3 +153,48 @@ test("funnel backend deduplicates signed product-stage events and counts distinc
   assert.equal(matchedQuery.args[2],validParams.conversationId);
   await assert.rejects(()=>funnel.countShopifyPaidClickConversions("business-1",["bad-id"]));
 });
+
+
+test("widget verifies a signed product line before recording cart addition",async()=>{
+  const widget=fs.readFileSync(path.join(__dirname,"..","public/widget.js"),"utf8");
+  const start=widget.indexOf("async function verifyShopifyCartAttribution(");
+  const end=widget.indexOf("async function addProductToShopifyCart(",start);
+  assert.ok(start>=0&&end>start,"Shopify cart verification helper is present");
+  const code=widget.slice(start,end);
+  const token=makeSigned();
+  const sent=[];
+  const variantId="1234567890123";
+  const cart={items:[{
+    variant_id:Number(variantId),quantity:1,
+    properties:{_aaryvo_attribution:token},
+  }]};
+  const context={
+    console:{warn:()=>{}},
+    aaryvoCommerceAllowed:()=>true,
+    shopifyCartUrl:()=>"/cart.js",
+    fetch:async()=>({ok:true,json:async()=>cart}),
+    sendShopifyFunnelEvent:(event,proof)=>sent.push({event,proof}),
+    // Keep failed verification retries instantaneous during tests.
+    setTimeout:callback=>callback(),
+  };
+  const verifier=vm.runInNewContext(code+";verifyShopifyCartAttribution",context);
+  await verifier({attributionToken:token},variantId);
+  assert.equal(sent.length,1);
+  assert.equal(sent[0].event,"ADD_TO_CART");
+  assert.equal(sent[0].proof,token);
+
+  sent.length=0;
+  cart.items[0].properties._aaryvo_attribution="invalid-marker";
+  await verifier({attributionToken:token},variantId);
+  assert.equal(sent.length,0,"Wrong cart line marker must not generate a conversion");
+
+  cart.items[0].properties._aaryvo_attribution=token;
+  sent.length=0;
+  await verifier({attributionToken:"not-signed"},variantId);
+  assert.equal(sent.length,0,"Malformed proof must not generate a conversion");
+
+  sent.length=0;
+  context.aaryvoCommerceAllowed=()=>false;
+  await verifier({attributionToken:token},variantId);
+  assert.equal(sent.length,0,"Customer privacy restrictions must be respected");
+});
