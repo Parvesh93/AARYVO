@@ -203,7 +203,10 @@ function quickPrompts(){const shopify=Array.isArray(config.quickPrompts)&&config
 function esc(t){return String(t||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]))}function rich(t){let s=esc(t).replace(/\*\*([^*\n]+)\*\*/g,"<strong>$1</strong>").replace(/(https?:\/\/[^\s<]+)/g,u=>`<a href="${u}" target="_blank" rel="noopener">${u}</a>`);return s.split("\n").filter(Boolean).map(x=>`<p>${x}</p>`).join("")}function end(){messages.scrollTop=messages.scrollHeight}function add(t,r,ui,products){const w=document.createElement("div");w.className=`message-wrap ${r==="user"?"user-wrap":""}`;const e=document.createElement("div");e.className=`msg ${r}${r==="ai"?" rich":""}`;r==="ai"?e.innerHTML=rich(t):e.textContent=t;w.appendChild(e);messages.appendChild(w);if(r==="ai"&&Array.isArray(products)&&products.length)renderProducts(w,products);if(r==="ai"&&ui)renderUi(w,ui);end();return w}function money(p){if(p==null)return"";const c={INR:"₹",USD:"$",EUR:"€",GBP:"£",AUD:"A$",CAD:"C$"};return`${c[p.currencyCode]||`${p.currencyCode||""} `}${Number(p.minPrice).toLocaleString(undefined,{maximumFractionDigits:2})}${p.maxPrice!=null&&p.maxPrice!==p.minPrice?` – ${Number(p.maxPrice).toLocaleString(undefined,{maximumFractionDigits:2})}`:""}`}
 function nativeVariantId(value){
   const matched=String(value||"").match(/^(?:gid:\/\/shopify\/ProductVariant\/)?([0-9]{5,20})$/);
-  return matched?matched[1]:null;
+  // The Ajax Cart API needs the variant ID, not the product ID or a
+  // GraphQL global ID. Reject numbers that JS cannot represent exactly.
+  if(!matched||!Number.isSafeInteger(Number(matched[1])))return null;
+  return matched[1];
 }
 function shopifyCartUrl(resource){
   if(!window.Shopify||!window.Shopify.routes||!window.Shopify.routes.root)return null;
@@ -213,9 +216,26 @@ function shopifyCartUrl(resource){
     return (rootUrl.pathname.endsWith("/")?rootUrl.pathname:rootUrl.pathname+"/")+resource;
   }catch{return null}
 }
-function safeCartError(error){
-  if(typeof error!=="string")return "Could not add this item. Please try again.";
-  return error.slice(0,170);
+function safeCartError(error,status){
+  // Never display untrusted HTML, network traces or Shopify challenge pages
+  // in the chat. Preserve actionable Shopify JSON error descriptions.
+  const message=typeof error==="string"?error.trim():"";
+  const plain=message&&message.length<=300&&!/[<>]/.test(message)?
+    message.slice(0,170):"";
+  if(status===429)return "Too many cart requests. Please retry shortly.";
+  if(status===401||status===403)return "Shopify blocked this cart request (HTTP "+status+"). Open the product page to continue.";
+  if(status===404)return "The Shopify cart endpoint was not found (HTTP 404). Open the product page to continue.";
+  if(status===422){
+    if(/cannot find variant/i.test(plain))
+      return "This option is not currently available in the online store. Try another option or open the product page.";
+    if(plain&&plain!=="Cart Error")return plain;
+    return "Shopify could not add this variant (HTTP 422). Check stock or try another option.";
+  }
+  if(status>=500)return "Shopify cart is temporarily unavailable (HTTP "+status+"). Please try again.";
+  if(status>=400)return plain&&plain!=="Cart Error"?plain:
+    "Shopify rejected the cart request (HTTP "+status+"). Please open the product page.";
+  if(plain)return plain;
+  return "Could not reach the Shopify cart. Check your connection and try again.";
 }
 async function addProductToShopifyCart(product,variant,button,feedback){
   const variantId=nativeVariantId(variant?.id),url=shopifyCartUrl("cart/add.js");
@@ -223,7 +243,7 @@ async function addProductToShopifyCart(product,variant,button,feedback){
   const marker=typeof product.attributionToken==="string" &&
     /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]{43}$/.test(product.attributionToken)
       ?product.attributionToken:null;
-  const item={id:variantId,quantity:1};
+  const item={id:Number(variantId),quantity:1};
   if(marker)item.properties={_aaryvo_attribution:marker};
   const previousLabel=button.textContent;
   button.disabled=true;
@@ -238,11 +258,33 @@ async function addProductToShopifyCart(product,variant,button,feedback){
       headers:{"Content-Type":"application/json","Accept":"application/json"},
       body:JSON.stringify({items:[item]}),...abort
     });
-    const payload=await response.json().catch(()=>null);
-    if(!response.ok)throw Error(safeCartError(payload?.description||payload?.message));
-    const added=Array.isArray(payload?.items)&&payload.items.find(line=>
+    const contentType=response.headers.get("content-type")||"";
+    const payload=contentType.includes("application/json")?
+      await response.json().catch(()=>null):null;
+    if(!response.ok){
+      console.warn("AARYVO cart add rejected",{status:response.status,
+        json:contentType.includes("application/json"),variantId});
+      throw Error(safeCartError(payload?.description||payload?.message,response.status));
+    }
+    let added=Array.isArray(payload?.items)&&payload.items.find(line=>
       String(line.variant_id||line.id)===variantId && Number(line.quantity)>0);
-    if(!added)throw Error("Cart confirmation was unavailable. Please check your cart.");
+    if(!added){
+      // Some themes or middleware return a non-standard success payload.
+      // Verify the actual storefront cart rather than incorrectly reporting failure.
+      const cartPath=shopifyCartUrl("cart.js");
+      if(cartPath){
+        const cartResponse=await fetch(cartPath,{credentials:"same-origin",cache:"no-store"});
+        if(cartResponse.ok){
+          const cart=await cartResponse.json();
+          if(Array.isArray(cart?.items)){
+            added=cart.items.find(line=>String(line.variant_id||line.id)===variantId &&
+              Number(line.quantity)>0 &&
+              (!marker||line.properties?._aaryvo_attribution===marker));
+          }
+        }
+      }
+    }
+    if(!added)throw Error("Shopify did not confirm the cart change. Please check your cart before trying again.");
     if(marker&&added.properties?._aaryvo_attribution===marker)
       sendShopifyFunnelEvent("ADD_TO_CART",marker);
     feedback.textContent="Added to cart. ";
