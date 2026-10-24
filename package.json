@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint .",
     "postinstall": "prisma generate",
-    "test:commerce": "node --test tests/commerce-regression.test.cjs tests/shopify-funnel.test.cjs tests/shopify-merchant-list.test.cjs tests/shopify-account-link.test.cjs"
+    "test:commerce": "node --test tests/commerce-regression.test.cjs tests/shopify-funnel.test.cjs tests/shopify-merchant-list.test.cjs tests/shopify-account-link.test.cjs tests/shopify-knowledge-write.test.cjs"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.10.0",

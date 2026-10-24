@@ -458,8 +458,16 @@ export async function POST(request: Request) {
         if (!title || !content) return response({ ok: false, message: "Add a title and knowledge content." }, 400);
         const count = await prisma.knowledgeItem.count({ where: { agentId: agent.id, source: { startsWith: "manual:" } } });
         if (count >= 100) return response({ ok: false, message: "Maximum 100 manual knowledge items." }, 400);
+        // Provide an explicit primary key for compatibility with older
+        // production MySQL tables that may not match Prisma's generated ID
+        // default. Never overwrite automatically synced Shopify records.
+        const uniqueId = crypto.randomUUID();
         await prisma.knowledgeItem.create({ data: {
-          agentId: agent.id, title, content, source: "manual:shopify-admin:" + crypto.randomUUID(),
+          id: uniqueId,
+          agentId: agent.id,
+          title,
+          content,
+          source: "manual:shopify-admin:" + uniqueId,
         } });
         return response({ ok: true, shop, resource, message: "Knowledge entry added." });
       }
@@ -601,9 +609,32 @@ export async function POST(request: Request) {
 
     return response({ ok: false, message: "This operation is not available." }, 400);
   } catch (error) {
-    // Avoid leaking Shopify tokens, database details and secrets to the merchant.
-    console.error("Shopify merchant dashboard bridge failed", resource, operation,
-      error instanceof Error ? error.message : "Unknown error");
+    // A production error code is actionable without disclosing SQL, private
+    // knowledge, credentials, database names or internal stack traces.
+    const reference = crypto.randomUUID().slice(0, 8);
+    const code = typeof error === "object" && error !== null &&
+      "code" in error && typeof error.code === "string"
+      ? error.code : "UNKNOWN";
+    console.error("Shopify merchant dashboard bridge failed", {
+      resource, operation, reference, code,
+      detail: error instanceof Error ? error.message : "Unknown error",
+    });
+    if (resource === "knowledge" && ["create", "save", "delete"].includes(operation)) {
+      const known: Record<string, string> = {
+        P1001: "The AARYVO database is unreachable. Check the backend database connection.",
+        P1002: "The AARYVO database timed out. Please retry shortly.",
+        P2000: "The knowledge entry is too large for the database. Shorten the text and retry.",
+        P2002: "A duplicate knowledge entry ID was generated. Please retry.",
+        P2003: "The Shopify assistant's knowledge database relationship is invalid. Contact support.",
+        P2011: "A required knowledge database field is missing. Contact support.",
+        P2021: "The knowledge database table is missing. Apply the production database migrations.",
+        P2022: "A knowledge database column is missing. Apply the production database migrations.",
+      };
+      return response({ ok: false, code: "KNOWLEDGE_WRITE_FAILED",
+        reference, message: (known[code] ||
+          "Could not save this knowledge entry. Contact support with error reference " + reference + "."),
+      }, 500);
+    }
     return response({ ok: false, message: "Unable to complete this dashboard operation. Please try again." }, 500);
   }
 }
