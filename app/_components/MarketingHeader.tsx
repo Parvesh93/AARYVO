@@ -31,7 +31,7 @@ export default function MarketingHeader() {
 
         <div className="hidden items-center gap-2 md:flex">
           <Link href="/login" className="rounded-full px-4 py-2.5 text-sm font-medium text-black/55 transition hover:text-black">Sign in</Link>
-          <Link href="/signup" className="premium-button inline-flex items-center gap-2 rounded-full bg-[#161616] px-5 py-2.5 text-sm font-medium text-white">Start free <ArrowRight size={14} /></Link>
+          <Link href="/signup" className="premium-button inline-flex items-center gap-2 rounded-full bg-[#161616] px-5 py-2.5 text-sm font-medium text-white">Get started <ArrowRight size={14} /></Link>
         </div>
 
         <button type="button" aria-label={menuOpen ? "Close menu" : "Open menu"} onClick={() => setMenuOpen((value) => !value)} className="grid h-10 w-10 place-items-center rounded-full bg-black text-white md:hidden">
@@ -49,7 +49,7 @@ export default function MarketingHeader() {
           <div className="my-3 h-px bg-black/10" />
           <div className="grid gap-2">
             <Link href="/login" onClick={close} className="rounded-full border border-black/10 px-5 py-3.5 text-center text-sm font-medium">Sign in</Link>
-            <Link href="/signup" onClick={close} className="rounded-full bg-black px-5 py-3.5 text-center text-sm font-medium text-white">Start free</Link>
+            <Link href="/signup" onClick={close} className="rounded-full bg-black px-5 py-3.5 text-center text-sm font-medium text-white">Get started</Link>
           </div>
         </div>
       </div>
