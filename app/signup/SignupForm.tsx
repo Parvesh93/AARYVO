@@ -25,7 +25,12 @@ export default function SignupForm({ next }: { next?: string }) {
         setError(data.error || "Account could not be created.");
         return;
       }
-      router.push(next ? `/onboarding?next=${encodeURIComponent(next)}` : data.redirectTo || "/onboarding");
+      // Account-link signup must not create an unrelated direct-billed
+      // workspace before attaching the Shopify-authorized one.
+      const accountLink=next?.startsWith("/account/link-shopify?ticket=");
+      router.push(accountLink ? next! :
+        next ? `/onboarding?next=${encodeURIComponent(next)}` :
+        data.redirectTo || "/onboarding");
       router.refresh();
     } catch {
       setError("Could not connect to AARYVO. Please try again.");
