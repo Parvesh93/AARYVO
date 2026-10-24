@@ -65,6 +65,7 @@ const imports={
   "@/lib/prisma":{prisma},
   "@/lib/plan-entitlements":{entitlementsForPlan:()=>({}),hasFeature:()=>true},
   "@/lib/shopify-funnel":{readShopifyFunnelSummary:async()=>({}),countShopifyPaidClickConversions:async()=>0},
+  "@/lib/billing":{businessUsagePeriod:()=>({start:new Date("2026-10-01"),end:new Date("2026-11-01")})},
   "@/lib/shopify-merchant-list":{
     listQuery:data=>({page:data.page||0,pageSize:25,search:typeof data.search==="string"?data.search:""}),
     searchPage:(items,total,query,extra)=>({items,total,...query,...extra}),
