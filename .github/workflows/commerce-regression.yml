@@ -12,6 +12,7 @@ on:
       - "app/signup/**"
       - "app/dashboard/integrations/page.tsx"
       - "tests/shopify-account-link.test.cjs"
+      - "tests/shopify-knowledge-write.test.cjs"
       - "lib/shopify-funnel.ts"
       - "lib/shopify-merchant-list.ts"
       - "app/api/internal/shopify-bridge/merchant/**"
