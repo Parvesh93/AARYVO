@@ -179,3 +179,54 @@ test("Shopify widget booking CTA requires an explicit server action", () => {
   assert.match(widget, /const canBook=Boolean\(inChat&&config\.bookingEnabled&&next\?\.booking===true\)/);
   assert.match(widget, /setActions\(d\.actions\|\|\{booking:false,whatsapp:false\}\)/);
 });
+
+const knowledge = loadTs("lib/widget-knowledge.ts", {});
+
+test("manual return policy answers a shopper even when old site pages fill the context", () => {
+  const items = [
+    {title:"Old website page",source:"https://example.com/about",
+     content:"Archived general information ".repeat(1600),createdAt:new Date("2026-01-01")},
+    {title:"Returns & Refund Policy",source:"manual:shopify-admin:entry1",
+     content:"We accept returns within 7 days for unused items with tags.",
+     createdAt:new Date("2026-10-24")},
+    {title:"Old other page",source:"https://example.com/other",
+     content:"Unrelated old page ".repeat(900),createdAt:new Date("2026-02-01")},
+  ];
+  const ordered=knowledge.rankWidgetKnowledge(items,"Do you provide returns?");
+  assert.equal(ordered[0].title,"Returns & Refund Policy");
+  const item=knowledge.matchingManualPolicy(items,"Do you provide returns?");
+  assert.equal(item.source,"manual:shopify-admin:entry1");
+  assert.match(knowledge.verifiedManualPolicyReply(item),/accept returns within 7 days/i);
+});
+test("manual negative policy is never turned into a claim that returns are offered",()=>{
+  const item={title:"Return Policy",source:"manual:shopify-admin:no-returns",
+    content:"We do not accept returns or exchanges.",createdAt:new Date()};
+  assert.match(knowledge.verifiedManualPolicyReply(item),/do not accept returns/i);
+  assert.equal(knowledge.matchingManualPolicy([item],"Can I return a purchase?"),item);
+});
+test("unverified Shopify product knowledge cannot become a manual return-policy answer",()=>{
+  const item={title:"Return Policy",source:"shopify://product/123",
+    content:"Returns available",createdAt:new Date()};
+  assert.equal(knowledge.matchingManualPolicy([item],"Do you provide returns?"),null);
+  assert.equal(knowledge.rankWidgetKnowledge([item],"Do you provide returns?").length,0);
+});
+test("policy clarification does not invent an unrelated policy",()=>{
+  const items=[{title:"Shipping Policy",source:"manual:123",
+    content:"Dispatch within 48 hours",createdAt:new Date()}];
+  assert.equal(knowledge.matchingManualPolicy(items,"Do you provide returns?"),null);
+  assert.equal(knowledge.matchingManualPolicy(items,"When do you ship?"),items[0]);
+});
+test("chat route checks for verified manual policy before generic AI fallback",()=>{
+  const source=fs.readFileSync(path.join(__dirname,"..","app/api/widget/chat/route.ts"),"utf8");
+  assert.match(source,/matchingManualPolicy\(websiteKnowledgeItems, message\)/);
+  assert.match(source,/if \(directPolicyReply\) \{/);
+});
+test("Shopify knowledge CRUD selects the storefront's active assistant",()=>{
+  const bridge=fs.readFileSync(path.join(__dirname,"..","app/api/internal/shopify-bridge/merchant/route.ts"),"utf8");
+  const start=bridge.indexOf('if (resource === "knowledge")');
+  const end=bridge.indexOf('if (resource === "appointments")',start);
+  const source=bridge.slice(start,end);
+  assert.match(source,/where: \{ businessId, isActive: true \}/);
+  assert.match(source,/activeKnowledgeAgent\.id/);
+  assert.doesNotMatch(source,/agent\.id/);
+});

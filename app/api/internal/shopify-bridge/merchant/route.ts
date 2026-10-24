@@ -426,7 +426,13 @@ export async function POST(request: Request) {
     }
 
     if (resource === "knowledge") {
-      if (!agent) return response({ ok: false, message: "No AI assistant configured." }, 404);
+      // Match the same active assistant used by Shopify's storefront script.
+      const activeKnowledgeAgent = await prisma.agent.findFirst({
+        where: { businessId, isActive: true },
+        orderBy: { id: "asc" },
+        select: { id: true },
+      });
+      if (!activeKnowledgeAgent) return response({ ok: false, message: "No active AI assistant configured." }, 404);
       // MariaDB installations may have mixed utf8mb4_unicode_ci and
       // utf8mb4_bin collations. Prisma "startsWith" produces LIKE, which
       // fails with error 1267 on these installations. Compare a fixed ASCII
@@ -436,7 +442,7 @@ export async function POST(request: Request) {
       const countManualKnowledge = async () => {
         const counts = await prisma.$queryRawUnsafe<Array<{ total: bigint | number }>>(
           "SELECT COUNT(*) AS total FROM `knowledgeitem` WHERE `agentId` = ? AND " + manualPrefix,
-          agent.id,
+          activeKnowledgeAgent.id,
         );
         return Number(counts[0]?.total ?? 0);
       };
@@ -451,9 +457,9 @@ export async function POST(request: Request) {
         if (source === "all" && !query.search) {
           // Default library stays index-friendly and uses the normal ORM.
           const result = await Promise.all([
-            prisma.knowledgeItem.count({ where: {agentId: agent.id} }),
+            prisma.knowledgeItem.count({ where: {agentId: activeKnowledgeAgent.id} }),
             prisma.knowledgeItem.findMany({
-              where: {agentId: agent.id},
+              where: {agentId: activeKnowledgeAgent.id},
               orderBy: [{ createdAt: "desc" }, { id: "desc" }],
               skip: query.page * query.pageSize, take: query.pageSize,
               select: rowFields,
@@ -466,7 +472,7 @@ export async function POST(request: Request) {
           // with collations mixed by the MariaDB adapter. SQL fragments below
           // are fixed server-side strings; the search term remains bound.
           const clauses = ["`agentId` = ?"];
-          const params: Array<string | number> = [agent.id];
+          const params: Array<string | number> = [activeKnowledgeAgent.id];
           if (source !== "all") {
             clauses.push(source === "manual" ? manualPrefix : "NOT (" + manualPrefix + ")");
           }
@@ -489,7 +495,7 @@ export async function POST(request: Request) {
           total = Number(counts[0]?.total ?? 0);
           const ids = identifiers.map(item => item.id);
           const fetched = ids.length ? await prisma.knowledgeItem.findMany({
-            where: { agentId: agent.id, id: { in: ids } },
+            where: { agentId: activeKnowledgeAgent.id, id: { in: ids } },
             select: rowFields,
           }) : [];
           const byId = new Map(fetched.map(item => [item.id, item]));
@@ -515,7 +521,7 @@ export async function POST(request: Request) {
         const uniqueId = crypto.randomUUID();
         await prisma.knowledgeItem.create({ data: {
           id: uniqueId,
-          agentId: agent.id,
+          agentId: activeKnowledgeAgent.id,
           title,
           content,
           source: "manual:shopify-admin:" + uniqueId,
@@ -528,12 +534,12 @@ export async function POST(request: Request) {
         // Check ownership and source without LIKE, then require the exact
         // immutable source in the mutation to prevent editing synced entries.
         const existing = await prisma.knowledgeItem.findFirst({
-          where: { id, agentId: agent.id }, select: { source: true },
+          where: { id, agentId: activeKnowledgeAgent.id }, select: { source: true },
         });
         if (!existing?.source.startsWith("manual:")) return response({
           ok: false, message: "Manual knowledge entry not found or invalid.",
         }, 404);
-        const where = { id, agentId: agent.id, source: existing.source };
+        const where = { id, agentId: activeKnowledgeAgent.id, source: existing.source };
         const result = operation === "delete"
           ? await prisma.knowledgeItem.deleteMany({ where })
           : await (async () => {

@@ -2,6 +2,11 @@ import OpenAI from "openai";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { saveWidgetRichMessage } from "@/lib/widget-rich-history";
+import {
+  matchingManualPolicy,
+  rankWidgetKnowledge,
+  verifiedManualPolicyReply,
+} from "@/lib/widget-knowledge";
 import { createShopifyRecommendationMarker } from "@/lib/shopify-attribution";
 import { sendHumanAttentionNotification } from "@/lib/notifications";
 import { hasFeature } from "@/lib/plan-entitlements";
@@ -702,6 +707,9 @@ export async function POST(request: Request) {
       websiteKnowledgeItems = allKnowledgeItems.filter(
         (item) => !item.source.startsWith("shopify://"),
       );
+      // Older website crawl pages can exceed the prompt's 30k character
+      // knowledge cap. Manual policies must be loaded first for FAQ requests.
+      websiteKnowledgeItems = rankWidgetKnowledge(websiteKnowledgeItems, message);
     } catch (error) {
       console.error("AARYVO website knowledge read error", error);
     }
@@ -784,6 +792,10 @@ export async function POST(request: Request) {
 
     const recentMessages = newest.reverse();
     const knowledge = buildKnowledgeContext(websiteKnowledgeItems);
+    const manualPolicy = shopifyConnected
+      ? matchingManualPolicy(websiteKnowledgeItems, message)
+      : null;
+    const directPolicyReply = manualPolicy ? verifiedManualPolicyReply(manualPolicy) : null;
     const contextualMessage =
       currentPageProduct &&
       /\b(this|it|this product|this item|this one|same product|same item)\b/i.test(message)
@@ -1083,6 +1095,7 @@ AI EMPLOYEE CONFIGURATION:
 
 STRICT RULES:
 - Use only approved business knowledge below for business-specific facts. Never invent facts.
+- Manually approved store policies are authoritative for returns, refunds, shipping and cancellations. If relevant policy text is present, answer from it instead of saying information is unavailable.
 - Be concise, natural, helpful and sales-oriented. Contact details are already captured.
 ${
   qualificationEnabled
@@ -1120,7 +1133,11 @@ Reply with conversational text only. Do not output JSON or interactive UI.`;
 
     let parsed: { reply: string; ui: RichUi | null };
 
-    if (currentProductReply) {
+    if (directPolicyReply) {
+      // Do not tell a shopper a verified manual policy is unknown. The
+      // merchant-authored text is returned verbatim, without inventing terms.
+      parsed = { reply: directPolicyReply, ui: null };
+    } else if (currentProductReply) {
       parsed = {
         reply: currentProductReply,
         ui: currentProductUi,
