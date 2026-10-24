@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-import { getShopifyHostedPricingUrl, inspectShopifyPricingState, syncShopifyPricingState } from "@/lib/shopify";
+import { getShopifyHostedPricingUrl, inspectShopifyPricingState, syncShopifyPricingState, type ShopifyPricingTimings } from "@/lib/shopify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,31 +36,69 @@ export async function POST(request: Request) {
  const actual = Buffer.from(signature,"hex");
  if (actual.length !== expected.length || !crypto.timingSafeEqual(actual,expected)) return NextResponse.json({ok:false,error:"Unauthorized"}, {status:401});
  const action = body.action === "refresh" ? "refresh" : "status";
+ // Only log after authenticating the signed server-to-server request.
+ const trace = request.headers.get("x-aaryvo-perf-trace") || "";
+ const traceId = /^[0-9a-f-]{36}$/i.test(trace) ? trace : crypto.randomUUID();
+ const started = performance.now();
+ const timings: ShopifyPricingTimings & {
+   merchantLinkMs?: number; shopStoreMs?: number; pricingUrlMs?: number;
+   pricingVerificationMs?: number;
+ } = {};
+ let outcome = "exception";
+ try {
+ const linkStarted = performance.now();
  const link = await prisma.shopifyMerchantLink.findUnique({where:{shopDomain_appClientId:{shopDomain:shop,appClientId}},select:{businessId:true,business:{select:{billingChannel:true}}}});
- if (!link || link.business.billingChannel !== "SHOPIFY") return NextResponse.json({ok:false,error:"Workspace not provisioned"},{status:409});
+ timings.merchantLinkMs = Math.round(performance.now() - linkStarted);
+ if (!link || link.business.billingChannel !== "SHOPIFY") {
+  outcome = "not_provisioned";
+  return NextResponse.json({ok:false,error:"Workspace not provisioned"},{status:409});
+ }
+ const storeStarted = performance.now();
  const store = await prisma.shopifyStore.findUnique({where:{shopDomain:shop},select:{businessId:true,status:true}});
- if (!store || store.businessId !== link.businessId || store.status !== "CONNECTED") return NextResponse.json({ok:false,error:"Connect Shopify store first"},{status:409});
+ timings.shopStoreMs = Math.round(performance.now() - storeStarted);
+ if (!store || store.businessId !== link.businessId || store.status !== "CONNECTED") {
+  outcome = "store_not_connected";
+  return NextResponse.json({ok:false,error:"Connect Shopify store first"},{status:409});
+ }
  let pricingUrl: string | null = null;
  let pricingIssue: "APP_HANDLE_REQUIRED" | "PRICING_LOOKUP_FAILED" | null = null;
+ const pricingStarted = performance.now();
  try {
   pricingUrl = (await getShopifyHostedPricingUrl(link.businessId)).url;
  } catch(e) {
   console.warn("Unable to resolve Shopify hosted pricing page",e instanceof Error ? e.message : "Unknown");
   pricingIssue = process.env.SHOPIFY_APP_HANDLE?.trim() ? "PRICING_LOOKUP_FAILED" : "APP_HANDLE_REQUIRED";
+ } finally {
+  timings.pricingUrlMs = Math.round(performance.now() - pricingStarted);
  }
  try {
   const identity = { shopId, appId };
+  const verificationStarted = performance.now();
   const state = action === "refresh"
-   ? await syncShopifyPricingState(link.businessId, identity)
-   : await inspectShopifyPricingState(link.businessId, identity);
-  if (!state.managed) return NextResponse.json({ok:false,error:"Shopify App Pricing not available for this workspace",shop,pricingUrl,pricingIssue},{status:409});
+   ? await syncShopifyPricingState(link.businessId, identity, timings)
+   : await inspectShopifyPricingState(link.businessId, identity, timings);
+  timings.pricingVerificationMs = Math.round(performance.now() - verificationStarted);
+  if (!state.managed) {
+   outcome = "unmanaged";
+   return NextResponse.json({ok:false,error:"Shopify App Pricing not available for this workspace",shop,pricingUrl,pricingIssue},{status:409});
+  }
+  outcome = "verified";
   return NextResponse.json({ok:true,shop,active:state.active === true,
    plan:"handle" in state ? state.handle : null,pricingUrl,pricingIssue,
    cancelAtEnd:state.cancelAtEnd === true},{headers:{"Cache-Control":"no-store"}});
  } catch(e) {
+  outcome = "verification_unavailable";
   console.error("AARYVO Shopify billing verification failed",e instanceof Error ? e.message : "Unknown");
   return NextResponse.json({ok:true,shop,active:null,plan:null,pricingUrl,pricingIssue,
    verificationAvailable:false,verificationMessage:"Subscription verification is temporarily unavailable. You can select a plan in Shopify, but paid features remain locked until verification succeeds."},
    {headers:{"Cache-Control":"no-store"}});
+ }
+ } finally {
+  if (process.env.AARYVO_BILLING_PERF_LOGS === "true") {
+    console.info("AARYVO_PERF " + JSON.stringify({
+      event: "backend_billing_verification", traceId,
+      ...timings, totalMs: Math.round(performance.now() - started), outcome,
+    }));
+  }
  }
 }

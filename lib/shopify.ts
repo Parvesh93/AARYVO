@@ -1284,10 +1284,22 @@ async function fetchShopifyPricingSubscription(appId: string, shopId: string) {
   return payload.data.activeSubscription || null;
 }
 
+/**
+ * Stage timings for opt-in billing diagnostics only. No merchant identity,
+ * token, URL, subscription details or request body is logged.
+ */
+export type ShopifyPricingTimings = {
+  businessLookupMs?: number;
+  partnerApiMs?: number;
+  subscriptionWriteMs?: number;
+};
+
 async function readShopifyPricingState(
   businessId: string,
   verifiedShopifyIdentity?: { shopId: string; appId: string },
+  timings?: ShopifyPricingTimings,
 ) {
+  const businessStarted = performance.now();
   const business = await prisma.business.findUnique({
     where: { id: businessId },
     select: {
@@ -1295,6 +1307,7 @@ async function readShopifyPricingState(
       shopifyStore: true,
     },
   });
+  if (timings) timings.businessLookupMs = Math.round(performance.now() - businessStarted);
 
   if (!business?.shopifyStore) {
     return { managed: false as const, reason: "not_connected" as const };
@@ -1313,10 +1326,13 @@ async function readShopifyPricingState(
     const token = await refreshShopifyAccessToken(store);
     return getShopifyBillingIds(store.shopDomain, token);
   })();
-  const subscription = await fetchShopifyPricingSubscription(
-    billingIds.appId,
-    billingIds.shopId,
-  );
+  const partnerStarted = performance.now();
+  let subscription: ShopifyPricingSubscription | null;
+  try {
+    subscription = await fetchShopifyPricingSubscription(billingIds.appId, billingIds.shopId);
+  } finally {
+    if (timings) timings.partnerApiMs = Math.round(performance.now() - partnerStarted);
+  }
   if (subscription && (
     subscription.shop?.id !== billingIds.shopId ||
     subscription.shop?.myshopifyDomain?.toLowerCase() !== store.shopDomain
@@ -1532,8 +1548,9 @@ export async function cancelShopifyPricingSubscription(params: {
 export async function inspectShopifyPricingState(
   businessId: string,
   verifiedShopifyIdentity?: { shopId: string; appId: string },
+  timings?: ShopifyPricingTimings,
 ) {
-  const state = await readShopifyPricingState(businessId, verifiedShopifyIdentity);
+  const state = await readShopifyPricingState(businessId, verifiedShopifyIdentity, timings);
 
   if (!state.managed) {
     return {
@@ -1566,8 +1583,9 @@ export async function inspectShopifyPricingState(
 export async function syncShopifyPricingState(
   businessId: string,
   verifiedShopifyIdentity?: { shopId: string; appId: string },
+  timings?: ShopifyPricingTimings,
 ) {
-  const state = await readShopifyPricingState(businessId, verifiedShopifyIdentity);
+  const state = await readShopifyPricingState(businessId, verifiedShopifyIdentity, timings);
 
   if (!state.managed) {
     return {
@@ -1576,10 +1594,16 @@ export async function syncShopifyPricingState(
     };
   }
 
-  const applied = await applyShopifyPricingState({
-    businessId,
-    subscription: state.subscription,
-  });
+  const updateStarted = performance.now();
+  let applied: Awaited<ReturnType<typeof applyShopifyPricingState>>;
+  try {
+    applied = await applyShopifyPricingState({
+      businessId,
+      subscription: state.subscription,
+    });
+  } finally {
+    if (timings) timings.subscriptionWriteMs = Math.round(performance.now() - updateStarted);
+  }
 
   return {
     managed: true as const,
