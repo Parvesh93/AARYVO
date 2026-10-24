@@ -121,6 +121,12 @@ const host=document.createElement("div");host.setAttribute("data-aaryvo-root","t
 .launcher.niche-fashion svg{animation:aaryvoFashion 3.2s ease-in-out infinite;transform-origin:50% 15%}
 .launcher.niche-footwear svg{animation:aaryvoSneaker 2.7s ease-in-out infinite}
 .launcher.niche-skincare svg{animation:aaryvoSkincare 3.1s ease-in-out infinite}
+.launcher.niche-luggage svg{animation:aaryvoLuggage 3s ease-in-out infinite}
+.launcher.niche-fmcg svg{animation:aaryvoFmcg 2.8s ease-in-out infinite}
+.launcher.niche-robot svg{animation:aaryvoRobot 3.2s ease-in-out infinite}
+@keyframes aaryvoLuggage{0%,65%,100%{transform:translateY(0) rotate(0)}78%{transform:translateY(-4px) rotate(-4deg)}88%{transform:translateY(0) rotate(3deg)}}
+@keyframes aaryvoFmcg{0%,65%,100%{transform:scale(1)}78%{transform:scale(1.06)}88%{transform:scale(1)}}
+@keyframes aaryvoRobot{0%,65%,100%{transform:rotate(0)}75%{transform:rotate(-6deg)}85%{transform:rotate(6deg)}}
 @keyframes aaryvoBag{0%,65%,100%{transform:rotate(0)}76%{transform:rotate(-9deg)}87%{transform:rotate(8deg)}}
 @keyframes aaryvoFashion{0%,65%,100%{transform:rotate(0)}80%{transform:rotate(9deg)}90%{transform:rotate(-6deg)}}
 @keyframes aaryvoSneaker{0%,65%,100%{transform:translateY(0)}78%{transform:translateY(-4px)}89%{transform:translateY(0)}}
@@ -137,8 +143,11 @@ const panel=root.querySelector(".panel"),label=root.querySelector(".launcher-lab
 const nicheIcons={
 BAG:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 8h15l1 12h-17z"/><path d="M8.5 9V6a3.5 3.5 0 0 1 7 0v3"/></svg>',
 FASHION:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 6.5c-1.8 0-2.2-2.6 0-3.1 2.4-.6 3.4 2.1 1.1 3.6"/><path d="m12 9-8 7a2 2 0 0 0 1.3 3.5h13.4A2 2 0 0 0 20 16z"/></svg>',
-FOOTWEAR:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 14c3.8.3 5.3-1.7 7-4 .9 2.1 2.7 3.7 5.2 4.5l4.2 1.1c1.2.3 1.6 1.2 1.6 2.6V20H3z"/><path d="M9.3 13.6l2.2 1M11.7 12.8l2.1 1.1M3 18h18"/></svg>',
-SKINCARE:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 7h7v3H17v11H7V10h1.5zM9 3h6v4H9z"/><path d="M10 14h4M10 17h4"/></svg>'
+FOOTWEAR:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 15.5c2.5 0 4.6-.8 6.2-2.5l1.8-1.9c.8 1.8 2.4 3.1 4.8 3.8l3 .9c1.4.4 2.2 1.2 2.2 2.7V20H3z"/><path d="M10.5 13.2l2 1M12.8 12.6l2 1M3 18.5h18"/></svg>',
+SKINCARE:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8.5 7h7v3H17v11H7V10h1.5zM9 3h6v4H9z"/><path d="M10 14h4M10 17h4"/></svg>,
+LUGGAGE:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5V4a3 3 0 0 1 6 0v1"/><rect x="6" y="5" width="12" height="15" rx="2"/><path d="M9 9v7M15 9v7M8 20v2M16 20v2"/></svg>',
+FMCG:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 11a8 8 0 0 1 16 0"/><path d="M3 13h18M4 17h16M5 20h14"/><path d="m6 15 3 1 3-1 3 1 3-1"/><path d="M8 8h.01M12 7h.01M16 8h.01"/></svg>',
+ROBOT:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v3"/><circle cx="12" cy="2.5" r=".5"/><rect x="5" y="6" width="14" height="11" rx="3"/><path d="M9 11h.01M15 11h.01M8 15h8M3 10h2M19 10h2M8 17v3M16 17v3"/></svg>'
 };
 function placeLauncher(){
  const slot=document.querySelector("[data-aaryvo-widget-inline]");
