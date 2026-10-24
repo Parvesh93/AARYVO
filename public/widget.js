@@ -125,6 +125,7 @@ const host=document.createElement("div");host.setAttribute("data-aaryvo-root","t
 @keyframes aaryvoFashion{0%,65%,100%{transform:rotate(0)}80%{transform:rotate(9deg)}90%{transform:rotate(-6deg)}}
 @keyframes aaryvoSneaker{0%,65%,100%{transform:translateY(0)}78%{transform:translateY(-4px)}89%{transform:translateY(0)}}
 @keyframes aaryvoSkincare{0%,65%,100%{transform:translateY(0)}77%{transform:translateY(-4px)}88%{transform:translateY(0)}}
+.launcher.niche:not(.anim-pulse):not(.anim-glow):not(.anim-bounce) svg{animation:none!important}
 @media(prefers-reduced-motion:reduce){.launcher.niche svg{animation:none!important}}
 /* The editor app block controls inline vs floating; the chat panel remains an overlay. */
 :host(.left) .launcher-wrap{left:22px;right:auto;flex-direction:row-reverse}
