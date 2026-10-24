@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "lib/commerce-assistant.ts"
+      - "lib/widget-knowledge.ts"
       - "lib/shopify-catalog.ts"
       - "lib/shopify-attribution.ts"
       - "lib/shopify-account-link.ts"
