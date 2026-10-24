@@ -65,7 +65,10 @@ const imports={
   "@/lib/prisma":{prisma},
   "@/lib/plan-entitlements":{entitlementsForPlan:()=>({}),hasFeature:()=>true},
   "@/lib/shopify-funnel":{readShopifyFunnelSummary:async()=>({}),countShopifyPaidClickConversions:async()=>0},
-  "@/lib/shopify-merchant-list":{listQuery:()=>({}),searchPage:()=>({})},
+  "@/lib/shopify-merchant-list":{
+    listQuery:data=>({page:data.page||0,pageSize:25,search:typeof data.search==="string"?data.search:""}),
+    searchPage:(items,total,query,extra)=>({items,total,...query,...extra}),
+  },
 };
 const wrapper=vm.runInNewContext(
   "(function(require,module,exports){"+compiled.outputText+"\n})",
