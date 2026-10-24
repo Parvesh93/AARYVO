@@ -14,7 +14,12 @@ function sendShopifyFunnelEvent(eventType,token){
   fetch(base+"/api/widget/commerce-event",{
     method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({agentId,eventType,token}),keepalive:true
-  }).catch(()=>{});
+  }).then(async response=>{
+    if(!response.ok){
+      console.warn("AARYVO commerce event rejected",eventType,"HTTP",response.status);
+    }
+  }).catch(error=>console.warn("AARYVO commerce event unavailable",
+    eventType,error instanceof Error?error.message:"Network error"));
 }
 function attachShopifyCheckoutRef(){
   if(!window.Shopify)return;
@@ -237,6 +242,34 @@ function safeCartError(error,status){
   if(plain)return plain;
   return "Could not reach the Shopify cart. Check your connection and try again.";
 }
+async function verifyShopifyCartAttribution(product,variantId){
+  const token=product.attributionToken;
+  if(typeof token!=="string"||!/^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]{43}$/.test(token)){
+    console.warn("AARYVO cart attribution: signed product marker missing");
+    return;
+  }
+  if(!aaryvoCommerceAllowed())return;
+  const url=shopifyCartUrl("cart.js");
+  if(!url)return;
+  for(const pause of [0,250,600]){
+    if(pause)await new Promise(resolve=>setTimeout(resolve,pause));
+    try{
+      const response=await fetch(url,{credentials:"same-origin",cache:"no-store"});
+      if(!response.ok)continue;
+      const cart=await response.json();
+      if(Array.isArray(cart?.items)&&cart.items.some(item=>
+        String(item.variant_id||item.id)===String(variantId)&&
+        Number(item.quantity)>0&&item.properties?._aaryvo_attribution===token)){
+        sendShopifyFunnelEvent("ADD_TO_CART",token);
+        return;
+      }
+    }catch(error){
+      console.warn("AARYVO cart attribution verification failed",
+        error instanceof Error?error.message:"Unknown error");
+    }
+  }
+  console.warn("AARYVO cart attribution: matching cart line marker not found");
+}
 async function addProductToShopifyCart(product,variant,button,feedback){
   const variantId=nativeVariantId(variant?.id),url=shopifyCartUrl("cart/add.js");
   if(!variantId||!url)return;
@@ -285,8 +318,10 @@ async function addProductToShopifyCart(product,variant,button,feedback){
       }
     }
     if(!added)throw Error("Shopify did not confirm the cart change. Please check your cart before trying again.");
-    if(marker&&added.properties?._aaryvo_attribution===marker)
-      sendShopifyFunnelEvent("ADD_TO_CART",marker);
+    // Verify the actual Shopify cart line after the successful add. Some
+    // Shopify Ajax add responses omit properties even when they were saved.
+    // This must not block the shopper or falsely count an attempted addition.
+    if(marker)void verifyShopifyCartAttribution(product,variantId);
     feedback.textContent="Added to cart. ";
     const viewCart=document.createElement("a");
     viewCart.href=shopifyCartUrl("cart")||"/cart";
