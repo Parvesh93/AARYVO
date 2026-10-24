@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { entitlementsForPlan, hasFeature } from "@/lib/plan-entitlements";
 import { readShopifyFunnelSummary, countShopifyPaidClickConversions } from "@/lib/shopify-funnel";
 import { listQuery, searchPage } from "@/lib/shopify-merchant-list";
+import { businessUsagePeriod } from "@/lib/billing";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
       where: { id: link.businessId },
       select: {
         id: true, name: true, plan: true, billingChannel: true, subscriptionStatus: true,
-        monthlyConversationLimit: true, usagePeriodStart: true,
+        monthlyConversationLimit: true, usagePeriodStart: true, usagePeriodEnd: true,
         notificationEmail: true, notifyNewLead: true, notifyHotLead: true,
         notifyAppointment: true, notifyHumanAttention: true,
         bookingTimeZone: true, bookingSlotMinutes: true, bookingStartHour: true,
@@ -135,10 +136,16 @@ export async function POST(request: Request) {
       feature(name) ? null : response({ ok: false, message: "An active eligible Shopify plan is required for this feature." }, 403);
 
     if (resource === "overview" && operation === "read") {
-      const period = business.usagePeriodStart || new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+      // Match the exact period used by widget quota enforcement.
+      // Previously this endpoint used a stale usagePeriodStart (which billing
+      // verification could refresh to "now") and displayed 0 incorrectly.
+      const period = businessUsagePeriod(business);
       const [conversationCount, monthlyUsage, leadCount, appointments, attention, recent] = await Promise.all([
         prisma.conversation.count({ where: { agent: { businessId } } }),
-        prisma.conversation.count({ where: { agent: { businessId }, startedAt: { gte: period } } }),
+        prisma.conversation.count({ where: {
+          agent: { businessId },
+          startedAt: { gte: period.start, lt: period.end },
+        } }),
         prisma.lead.count({ where: { businessId } }),
         prisma.appointment.count({ where: { businessId } }),
         prisma.conversation.count({ where: { agent: { businessId }, needsHuman: true, resolvedAt: null } }),
@@ -153,6 +160,8 @@ export async function POST(request: Request) {
       return response({ ok: true, shop, resource, data: {
         store: shop, name: business.name, plan: business.plan, subscriptionStatus: business.subscriptionStatus,
         monthlyConversationLimit: business.monthlyConversationLimit, monthlyUsage,
+        usagePeriodStart: period.start.toISOString(),
+        usagePeriodEnd: period.end.toISOString(),
         conversationCount, leadCount, appointments, attention,
         agent: agent ? { name: agent.name, active: agent.isActive } : null,
         recent: recent.map(item => ({

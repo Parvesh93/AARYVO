@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { decryptToken, encryptToken } from "@/lib/token-crypto";
 import { normalizePlan } from "@/lib/plan-entitlements";
+import { resolveShopifyUsageWindow } from "@/lib/shopify-usage-period";
 
 const API_VERSION = "2026-07";
 const DEFAULT_SCOPES = ["read_products", "read_inventory"];
@@ -1379,15 +1380,16 @@ async function applyShopifyPricingState(params: {
 
   const plan = handle.toUpperCase() as "STARTER" | "GROWTH" | "PRO";
   const limits = { STARTER: 500, GROWTH: 2000, PRO: 5000 } as const;
-  const now = new Date();
-  const periodStart = subscription.currentBillingCycle?.startTime
-    ? new Date(subscription.currentBillingCycle.startTime)
-    : now;
-  const periodEnd = subscription.currentBillingCycle?.endTime
-    ? new Date(subscription.currentBillingCycle.endTime)
-    : subscription.trialEndsAt
-      ? new Date(subscription.trialEndsAt)
-      : null;
+  const previous = await prisma.business.findUnique({
+    where: { id: params.businessId },
+    select: { plan: true, usagePeriodStart: true, usagePeriodEnd: true },
+  });
+  const { start: periodStart, end: periodEnd } = resolveShopifyUsageWindow({
+    plan,
+    currentBillingCycle: subscription.currentBillingCycle,
+    trialEndsAt: subscription.trialEndsAt,
+    previous,
+  });
 
   await prisma.business.update({
     where: { id: params.businessId },

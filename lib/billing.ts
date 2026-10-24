@@ -18,7 +18,10 @@ export function currentCalendarMonth(now=new Date()){
 
 export function businessUsagePeriod(business:{usagePeriodStart:Date|null;usagePeriodEnd:Date|null;subscriptionStatus:string;plan:string},now=new Date()){
   const paid=business.plan!=="FREE"&&["active","authenticated","charged","pending"].includes(String(business.subscriptionStatus||"").toLowerCase());
-  if(paid&&business.usagePeriodStart&&business.usagePeriodEnd&&business.usagePeriodEnd>now)return{start:business.usagePeriodStart,end:business.usagePeriodEnd};
+  if(paid&&business.usagePeriodStart&&business.usagePeriodEnd&&
+    business.usagePeriodStart<=now&&business.usagePeriodEnd>now&&
+    business.usagePeriodEnd>business.usagePeriodStart)
+    return{start:business.usagePeriodStart,end:business.usagePeriodEnd};
   return currentCalendarMonth(now);
 }
 
