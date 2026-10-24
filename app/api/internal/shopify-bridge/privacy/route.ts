@@ -73,6 +73,14 @@ export async function POST(request: Request) {
     const businessId = link.businessId;
 
     if (topic === "SHOP_REDACT") {
+      // Shopify normally sends this event after uninstall. Ignore stale or
+      // simulated redactions while the shop is actively connected, to avoid
+      // destroying a workspace that has since been reinstalled.
+      const activeStore = await prisma.shopifyStore.findUnique({
+        where: { shopDomain: shop },
+        select: { status: true },
+      });
+      if (activeStore?.status === "CONNECTED") return reply(true, 200);
       // A Shopify-only workspace belongs to this store. Do not destroy a
       // workspace shared by a different app or other shop.
       const links = await prisma.shopifyMerchantLink.count({ where: { businessId } });
