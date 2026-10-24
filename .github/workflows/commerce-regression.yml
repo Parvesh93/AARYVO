@@ -13,6 +13,7 @@ on:
       - "lib/billing.ts"
       - "lib/shopify.ts"
       - "tests/shopify-usage-period.test.cjs"
+      - "tests/shopify-knowledge-write.test.cjs"
       - "app/account/link-shopify/**"
       - "app/signup/**"
       - "app/dashboard/integrations/page.tsx"
