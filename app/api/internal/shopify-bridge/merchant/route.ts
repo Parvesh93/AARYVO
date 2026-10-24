@@ -255,7 +255,7 @@ export async function POST(request: Request) {
           accentColor: v => typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v) ? v : null,
           theme: enumField(["LIGHT", "DARK"]),
           position: enumField(["RIGHT", "LEFT"]),
-          launcherStyle: enumField(["SPARKLE", "CHAT", "TEXT"]),
+          launcherStyle: enumField(["SPARKLE", "CHAT", "TEXT", "BAG", "FASHION", "FOOTWEAR", "SKINCARE"]),
           launcherLabel: v => safeString(v, 60),
           launcherAnimation: enumField(["NONE", "PULSE", "GLOW", "BOUNCE"]),
           launcherLabelEnabled: bool,
