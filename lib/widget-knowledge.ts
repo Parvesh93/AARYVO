@@ -56,7 +56,7 @@ function createdTime(item: WidgetKnowledgeItem) {
   return Number.isFinite(value) ? value : 0;
 }
 
-export function rankWidgetKnowledge(items: WidgetKnowledgeItem[], message: string) {
+export function rankWidgetKnowledge<T extends WidgetKnowledgeItem>(items: T[], message: string): T[] {
   const topic = requestedPolicyTopic(message);
   return items
     .filter(item => !item.source.startsWith("shopify://") && Boolean(item.content.trim()))
@@ -67,7 +67,7 @@ export function rankWidgetKnowledge(items: WidgetKnowledgeItem[], message: strin
     });
 }
 
-export function matchingManualPolicy(items: WidgetKnowledgeItem[], message: string) {
+export function matchingManualPolicy<T extends WidgetKnowledgeItem>(items: T[], message: string): T | null {
   const topic = requestedPolicyTopic(message);
   if (!topic) return null;
   const candidates = items
