@@ -140,3 +140,42 @@ test("any budget explicitly removes the previous price ceiling", () => {
   assert.equal(state.intent.budgetMax, null);
   assert.match(commerce.buildCommerceRecommendationQuery(state), /gowns/i);
 });
+
+
+test("gifting for her remains a broad inventory search after recipient clarification", async () => {
+  const state = derive([
+    user("I'm looking for an outfit for gifting"),
+    assistant("Who are you shopping for?"),
+    user("It's for a female"),
+  ]);
+  assert.equal(state.active, true);
+  assert.equal(state.intent.recipient, "female");
+  assert.equal(state.intent.occasion, "gifting");
+  assert.equal(commerce.shouldClarifyCommerceBeforeProducts(state), false);
+  const query = commerce.buildCommerceRecommendationQuery(state);
+  assert.equal(query, "products available");
+  const products = await catalog.searchShopifyCatalog("test-business", query);
+  assert.ok(products.length >= 3, "Available Shopify products are discovered");
+  assert.ok(products.some(p => p.id === "dress"), "A dress without a gifting tag can be surfaced");
+});
+
+test("gifting with a budget honors the price ceiling without requiring gift tags", async () => {
+  const state = derive([
+    user("Suggest something for gifting under ₹5,000"),
+    assistant("Who are you shopping for?"),
+    user("It's for a female"),
+  ]);
+  const query = commerce.buildCommerceRecommendationQuery(state);
+  assert.equal(state.intent.budgetMax, 5000);
+  assert.doesNotMatch(query, /gift|gifting|female/i);
+  const results = await catalog.searchShopifyCatalog("test-business", query);
+  assert.ok(results.length > 0);
+  assert.ok(results.every(item => item.minPrice <= 5000));
+  assert.ok(results.every(item => item.id !== "gown"), "Above-budget gown is excluded");
+});
+
+test("Shopify widget booking CTA requires an explicit server action", () => {
+  const widget = fs.readFileSync(path.join(__dirname, "..", "public/widget.js"), "utf8");
+  assert.match(widget, /const canBook=Boolean\(inChat&&config\.bookingEnabled&&next\?\.booking===true\)/);
+  assert.match(widget, /setActions\(d\.actions\|\|\{booking:false,whatsapp:false\}\)/);
+});

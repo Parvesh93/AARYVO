@@ -166,8 +166,11 @@ export function buildCommerceRecommendationQuery(state: CommerceState) {
   const parts = [
     state.intent.category,
     state.intent.style,
-    state.intent.occasion,
-    state.broad && /\b(gift|gifting)\b/i.test(state.baseIntent) ? "gift" : null,
+    // Gifting describes the customer's purpose, not a mandatory word in a
+    // Shopify product title or tag. A dress does not need a "gift" tag to be
+    // a valid item to browse. Keep other occasion terms for exact searches.
+    state.intent.occasion && !/^(gift|gifting)$/.test(state.intent.occasion)
+      ? state.intent.occasion : null,
     ...state.intent.colors,
     ...state.intent.materials,
     ...state.intent.sizes,
@@ -180,7 +183,12 @@ export function buildCommerceRecommendationQuery(state: CommerceState) {
     parts.push(`under ${state.intent.budgetMax}`);
   }
 
-  if (!parts.length) return state.searchQuery;
+  if (!parts.length) {
+    // A recipient-only clarification ("It's for a female") should browse
+    // available stock, not search the catalog for the word "female".
+    // The recipient is context for recommendations, not a product keyword.
+    return state.broad ? "products available" : state.searchQuery;
+  }
   return [...new Set(parts)].join(" ");
 }
 
