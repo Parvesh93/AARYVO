@@ -3,13 +3,23 @@ name: Shopify Bridge Typecheck
 on:
   push:
     branches:
+      - main
       - feat/shopify-embedded-bridge
+    paths:
+      - "app/api/internal/shopify-bridge/**"
+      - "lib/email-delivery.ts"
+      - "lib/prisma.ts"
+      - "prisma/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/shopify-bridge-typecheck.yml"
   pull_request:
     branches:
       - main
     paths:
       - "app/api/internal/shopify-bridge/**"
       - "lib/prisma.ts"
+      - "lib/email-delivery.ts"
       - "prisma/**"
       - "package.json"
       - "package-lock.json"
